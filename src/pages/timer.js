@@ -204,7 +204,7 @@ function renderTimerCircle(label = '') {
           stroke-dasharray="${CIRCLE_CIRCUMFERENCE}" stroke-dashoffset="0"/>
       </svg>
       <div class="timer-display">
-        <div class="timer-time" id="timer-time" aria-live="off" aria-atomic="true">00:00</div>
+        <div class="timer-time" id="timer-time" aria-live="polite" aria-atomic="true">00:00</div>
         <div class="timer-label" id="timer-label">${label}</div>
       </div>
     </div>
@@ -235,7 +235,7 @@ function bindPresets(el) {
     btn.addEventListener('click', () => {
       el.querySelectorAll('[data-seconds]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const secs = parseInt(btn.dataset.seconds);
+      const secs = parseInt(btn.dataset.seconds, 10);
       const minInput = el.querySelector('#set-min');
       const secInput = el.querySelector('#set-sec');
       if (minInput) minInput.value = Math.floor(secs / 60);

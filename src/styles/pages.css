@@ -863,6 +863,8 @@
 .weekly-goal-ring {
   position: relative;
   flex-shrink: 0;
+  width: 80px;
+  height: 80px;
 }
 
 .weekly-goal-text {

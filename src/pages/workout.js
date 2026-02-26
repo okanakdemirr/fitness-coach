@@ -186,6 +186,7 @@ function renderActiveWorkout(container) {
 
 function renderExercises(container, settings) {
   const list = container.querySelector('#exercises-list');
+  if (!list) return;
   const unit = settings.weightUnit || 'kg';
 
   list.innerHTML = activeWorkout.exercises.map((ex, exIdx) => `
@@ -250,8 +251,8 @@ function renderExercises(container, settings) {
 
   list.querySelectorAll('.set-check').forEach(btn => {
     btn.addEventListener('click', () => {
-      const ex = parseInt(btn.dataset.ex);
-      const set = parseInt(btn.dataset.set);
+      const ex = parseInt(btn.dataset.ex, 10);
+      const set = parseInt(btn.dataset.set, 10);
       const wasCompleted = activeWorkout.exercises[ex].sets[set].completed;
       activeWorkout.exercises[ex].sets[set].completed = !wasCompleted;
       btn.classList.toggle('checked');
@@ -267,7 +268,7 @@ function renderExercises(container, settings) {
 
   list.querySelectorAll('.add-set-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const exIdx = parseInt(btn.dataset.ex);
+      const exIdx = parseInt(btn.dataset.ex, 10);
       const lastSet = activeWorkout.exercises[exIdx].sets.at(-1);
       activeWorkout.exercises[exIdx].sets.push({
         reps: lastSet?.reps || 10,
@@ -281,7 +282,7 @@ function renderExercises(container, settings) {
 
   list.querySelectorAll('.remove-exercise').forEach(btn => {
     btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.idx);
+      const idx = parseInt(btn.dataset.idx, 10);
       activeWorkout.exercises.splice(idx, 1);
       store.setActiveWorkout(activeWorkout);
       renderExercises(container, settings);
@@ -339,44 +340,51 @@ function showExercisePicker(container, settings) {
   render();
   const close = showModal(el);
 
-  // Delayed binding because modal animation
-  setTimeout(() => {
-    el.querySelector('#picker-close')?.addEventListener('click', close);
-
-    el.querySelector('#exercise-search')?.addEventListener('input', (e) => {
-      searchQuery = e.target.value;
-      render();
-      rebind();
-    });
-
-    function rebind() {
-      el.querySelectorAll('[data-cat]').forEach(chip => {
-        chip.addEventListener('click', () => {
-          filterCategory = chip.dataset.cat;
-          render();
-          rebind();
-        });
-      });
-
-      el.querySelectorAll('.exercise-pick').forEach(item => {
-        item.addEventListener('click', () => {
-          if (item.dataset.name === 'custom') {
-            const name = prompt('Exercise name:');
-            if (name?.trim()) {
-              const cleaned = name.trim().slice(0, 100);
-              addExerciseToWorkout(cleaned, 'custom', container, settings);
-              close();
-            }
-          } else {
-            addExerciseToWorkout(item.dataset.name, item.dataset.cat, container, settings);
-            close();
-          }
-        });
-      });
+  // Use event delegation to avoid listener accumulation on re-renders
+  el.addEventListener('click', (e) => {
+    // Close button
+    if (e.target.closest('#picker-close')) {
+      close();
+      return;
     }
 
-    rebind();
-  }, 100);
+    // Category filter chips
+    const chip = e.target.closest('[data-cat]');
+    if (chip && !chip.classList.contains('exercise-pick')) {
+      filterCategory = chip.dataset.cat;
+      render();
+      // Re-focus search if it had text
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+      return;
+    }
+
+    // Exercise selection
+    const item = e.target.closest('.exercise-pick');
+    if (item) {
+      if (item.dataset.name === 'custom') {
+        const name = prompt('Exercise name:');
+        if (name?.trim()) {
+          const cleaned = name.trim().slice(0, 100);
+          addExerciseToWorkout(cleaned, 'custom', container, settings);
+          close();
+        }
+      } else {
+        addExerciseToWorkout(item.dataset.name, item.dataset.cat, container, settings);
+        close();
+      }
+    }
+  });
+
+  el.addEventListener('input', (e) => {
+    if (e.target.id === 'exercise-search') {
+      searchQuery = e.target.value;
+      render();
+      // Keep focus and cursor position in search
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+    }
+  });
 }
 
 function addExerciseToWorkout(name, category, container, settings) {
@@ -393,13 +401,19 @@ function addExerciseToWorkout(name, category, container, settings) {
 function finishWorkout(container) {
   activeWorkout.endTime = new Date().toISOString();
   store.saveWorkout(activeWorkout);
-  store.clearActiveWorkout();
+
+  // Capture data before clearing state
+  const completedWorkout = activeWorkout;
+  const exerciseCount = completedWorkout.exercises.length;
+  const setsCompleted = completedWorkout.exercises.reduce(
+    (a, e) => a + e.sets.filter(s => s.completed).length, 0
+  );
 
   const close = showModal(`
     <div class="text-center">
       <div style="font-size:48px;margin-bottom:16px">&#127942;</div>
       <h3 class="modal-title mb-8">Workout Complete!</h3>
-      <p class="text-muted mb-16">${activeWorkout.exercises.length} exercises · ${activeWorkout.exercises.reduce((a, e) => a + e.sets.filter(s => s.completed).length, 0)} sets completed</p>
+      <p class="text-muted mb-16">${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''} · ${setsCompleted} sets completed</p>
       <div class="flex gap-8">
         <button class="btn btn-primary btn-block" id="finish-done">Done</button>
         <button class="btn btn-secondary btn-block" id="finish-save-template">Save as Template</button>
@@ -407,13 +421,16 @@ function finishWorkout(container) {
     </div>
   `);
 
+  function cleanup() {
+    store.clearActiveWorkout();
+    activeWorkout = null;
+    clearInterval(elapsedInterval);
+    close();
+    renderWorkoutStart(container);
+  }
+
   setTimeout(() => {
-    document.querySelector('#finish-done')?.addEventListener('click', () => {
-      close();
-      activeWorkout = null;
-      clearInterval(elapsedInterval);
-      renderWorkoutStart(container);
-    });
+    document.querySelector('#finish-done')?.addEventListener('click', cleanup);
 
     document.querySelector('#finish-save-template')?.addEventListener('click', () => {
       const name = prompt('Template name:', 'My Workout');
@@ -422,19 +439,18 @@ function finishWorkout(container) {
         store.saveTemplate({
           id: generateId('t_'),
           name: templateName,
-          exercises: activeWorkout.exercises.map(ex => ({
-            name: ex.name,
-            category: ex.category,
-            targetSets: ex.sets.length,
-            targetReps: ex.sets[0]?.reps || 10
-          }))
+          exercises: completedWorkout.exercises
+            .filter(ex => ex.sets && ex.sets.length > 0)
+            .map(ex => ({
+              name: ex.name,
+              category: ex.category,
+              targetSets: ex.sets.length,
+              targetReps: ex.sets[0].reps || 10
+            }))
         });
         showToast('Template saved!');
       }
-      close();
-      activeWorkout = null;
-      clearInterval(elapsedInterval);
-      renderWorkoutStart(container);
+      cleanup();
     });
   }, 100);
 }
@@ -512,7 +528,7 @@ function showRestTimerPopup(seconds) {
   });
   popup.querySelectorAll('[data-add]').forEach(btn => {
     btn.addEventListener('click', () => {
-      timeLeft = Math.max(1, timeLeft + parseInt(btn.dataset.add));
+      timeLeft = Math.max(1, timeLeft + parseInt(btn.dataset.add, 10));
       updatePopup();
     });
   });

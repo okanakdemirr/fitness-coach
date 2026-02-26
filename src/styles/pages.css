@@ -1,0 +1,634 @@
+/* ===== DASHBOARD ===== */
+.dashboard-greeting {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.dashboard-date {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+  text-decoration: none;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quick-action:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.quick-action:active {
+  transform: scale(0.97);
+}
+
+.quick-action-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-action-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.quick-action-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ===== TIMER PAGE ===== */
+.timer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+}
+
+.timer-circle {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin-bottom: 32px;
+}
+
+.timer-circle svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.timer-circle-bg {
+  fill: none;
+  stroke: var(--bg-tertiary);
+  stroke-width: 8;
+}
+
+.timer-circle-progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s linear;
+}
+
+.timer-circle-progress.warning {
+  stroke: var(--warning);
+}
+
+.timer-circle-progress.danger {
+  stroke: var(--danger);
+}
+
+.timer-display {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.timer-time {
+  font-size: 56px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.timer-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+.timer-controls {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.timer-control-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.timer-control-btn:active {
+  transform: scale(0.9);
+}
+
+.timer-control-btn.play {
+  background: var(--accent);
+  color: #0f0f1a;
+  width: 72px;
+  height: 72px;
+}
+
+.timer-control-btn.pause {
+  background: var(--warning);
+  color: #0f0f1a;
+  width: 72px;
+  height: 72px;
+}
+
+.timer-control-btn.stop {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+.timer-control-btn.reset {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.timer-control-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.timer-setup {
+  width: 100%;
+  max-width: 300px;
+}
+
+/* Interval timer specific */
+.interval-info {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.interval-info-item {
+  text-align: center;
+}
+
+.interval-info-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.interval-info-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.interval-phase {
+  font-size: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+}
+
+.interval-phase.work {
+  color: var(--accent);
+}
+
+.interval-phase.rest {
+  color: var(--warning);
+}
+
+.interval-phase.prepare {
+  color: var(--accent-secondary);
+}
+
+/* ===== WORKOUT PAGE ===== */
+.workout-active-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.workout-timer-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--accent-dim);
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.workout-timer-badge .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.exercise-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.exercise-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.exercise-block-name {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.exercise-block-category {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.exercise-block-body {
+  padding: 0 16px 16px;
+}
+
+.add-set-btn {
+  width: 100%;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 8px;
+}
+
+.add-set-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.add-exercise-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 2px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 4px;
+}
+
+.add-exercise-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ===== EXERCISE LIBRARY ===== */
+.exercise-search {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.exercise-search .input {
+  padding-left: 40px;
+}
+
+.exercise-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+}
+
+.category-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ===== HISTORY PAGE ===== */
+.history-date-group {
+  margin-bottom: 24px;
+}
+
+.history-date {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  padding-left: 4px;
+}
+
+.workout-summary-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.workout-summary-card:hover {
+  background: var(--bg-hover);
+}
+
+.workout-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.workout-summary-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.workout-summary-time {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.workout-summary-exercises {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.workout-summary-exercise {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.workout-summary-exercise + .workout-summary-exercise::before {
+  content: " \2022 ";
+  color: var(--text-muted);
+}
+
+/* ===== STATS PAGE ===== */
+.streak-display {
+  text-align: center;
+  padding: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.streak-number {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.streak-label {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.weekly-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 120px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+}
+
+.weekly-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.weekly-bar-fill {
+  width: 24px;
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+  transition: height 0.3s ease;
+  min-height: 2px;
+}
+
+.weekly-bar-fill.empty {
+  background: var(--bg-tertiary);
+}
+
+.weekly-bar-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* ===== SETTINGS PAGE ===== */
+.settings-group {
+  margin-bottom: 24px;
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  margin-bottom: -1px;
+}
+
+.settings-item:first-child {
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.settings-item:last-child {
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-bottom: 0;
+}
+
+.settings-item:only-child {
+  border-radius: var(--radius);
+}
+
+.settings-item-label {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.settings-item-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Toggle switch */
+.toggle {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-tertiary);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  bottom: 3px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  transition: all var(--transition);
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+  background: #0f0f1a;
+}
+
+/* ===== BODY STATS ===== */
+.body-stat-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.body-stat-date {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.body-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ===== TEMPLATES ===== */
+.template-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.template-card:hover {
+  border-color: var(--accent);
+}
+
+.template-name {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.template-exercises {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.template-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}

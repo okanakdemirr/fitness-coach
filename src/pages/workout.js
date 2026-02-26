@@ -1,0 +1,433 @@
+import { store } from '../store.js';
+import { exercises as exerciseDB, categories } from '../data/exercises.js';
+import { generateId, todayStr, showToast, showModal, formatTime } from '../utils.js';
+
+let activeWorkout = null;
+let elapsedInterval = null;
+let startTimestamp = null;
+
+export function workoutPage(container) {
+  activeWorkout = store.getActiveWorkout();
+
+  if (activeWorkout) {
+    renderActiveWorkout(container);
+  } else {
+    renderWorkoutStart(container);
+  }
+
+  return () => {
+    clearInterval(elapsedInterval);
+    elapsedInterval = null;
+  };
+}
+
+function renderWorkoutStart(container) {
+  const templates = store.getTemplates();
+
+  container.innerHTML = `
+    <p class="page-title">Start Workout</p>
+
+    <button class="btn btn-primary btn-lg btn-block mb-24" id="start-empty">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      Start Empty Workout
+    </button>
+
+    ${templates.length > 0 ? `
+      <p class="section-title">Templates</p>
+      ${templates.map(t => `
+        <div class="template-card" data-template="${t.id}">
+          <div class="template-name">${t.name}</div>
+          <div class="template-exercises">${t.exercises.map(e => e.name).join(' · ')}</div>
+          <div class="template-actions">
+            <button class="btn btn-sm btn-primary start-template" data-id="${t.id}">Start</button>
+            <button class="btn btn-sm btn-danger delete-template" data-id="${t.id}">Delete</button>
+          </div>
+        </div>
+      `).join('')}
+    ` : `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M9 12h6M12 9v6"/>
+        </svg>
+        <p>No templates yet.<br>Finish a workout and save it as a template!</p>
+      </div>
+    `}
+  `;
+
+  container.querySelector('#start-empty').addEventListener('click', () => {
+    startNewWorkout([]);
+    renderActiveWorkout(container);
+  });
+
+  container.querySelectorAll('.start-template').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tpl = templates.find(t => t.id === btn.dataset.id);
+      if (tpl) {
+        const exercises = tpl.exercises.map(ex => ({
+          name: ex.name,
+          category: ex.category,
+          sets: Array.from({ length: ex.targetSets || 3 }, () => ({
+            reps: ex.targetReps || 10,
+            weight: 0,
+            completed: false
+          }))
+        }));
+        startNewWorkout(exercises);
+        renderActiveWorkout(container);
+      }
+    });
+  });
+
+  container.querySelectorAll('.delete-template').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      store.deleteTemplate(btn.dataset.id);
+      showToast('Template deleted');
+      renderWorkoutStart(container);
+    });
+  });
+}
+
+function startNewWorkout(exercises) {
+  activeWorkout = {
+    id: generateId('w_'),
+    date: todayStr(),
+    startTime: new Date().toISOString(),
+    endTime: null,
+    exercises: exercises,
+    notes: ''
+  };
+  store.setActiveWorkout(activeWorkout);
+}
+
+function renderActiveWorkout(container) {
+  startTimestamp = new Date(activeWorkout.startTime);
+  const settings = store.getSettings();
+
+  container.innerHTML = `
+    <div class="workout-active-header">
+      <div class="workout-timer-badge">
+        <span class="dot"></span>
+        <span id="elapsed-time">00:00</span>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-sm btn-secondary" id="btn-finish">Finish</button>
+        <button class="btn btn-sm btn-danger" id="btn-discard">Discard</button>
+      </div>
+    </div>
+
+    <div id="exercises-list"></div>
+
+    <button class="add-exercise-btn" id="btn-add-exercise">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      Add Exercise
+    </button>
+
+    <div class="mt-16">
+      <label class="input-label">Workout Notes</label>
+      <textarea class="input" id="workout-notes" rows="2" placeholder="How did it feel?">${activeWorkout.notes || ''}</textarea>
+    </div>
+  `;
+
+  renderExercises(container, settings);
+  startElapsedTimer(container);
+
+  container.querySelector('#btn-add-exercise').addEventListener('click', () => {
+    showExercisePicker(container, settings);
+  });
+
+  container.querySelector('#btn-finish').addEventListener('click', () => {
+    finishWorkout(container);
+  });
+
+  container.querySelector('#btn-discard').addEventListener('click', () => {
+    const close = showModal(`
+      <div class="modal-header">
+        <h3 class="modal-title">Discard Workout?</h3>
+        <button class="modal-close" id="modal-cancel">&times;</button>
+      </div>
+      <p class="text-muted mb-16">This will delete all progress for this workout.</p>
+      <div class="flex gap-8">
+        <button class="btn btn-danger btn-block" id="modal-confirm">Discard</button>
+        <button class="btn btn-secondary btn-block" id="modal-cancel2">Cancel</button>
+      </div>
+    `);
+
+    setTimeout(() => {
+      document.querySelector('#modal-confirm')?.addEventListener('click', () => {
+        store.clearActiveWorkout();
+        activeWorkout = null;
+        clearInterval(elapsedInterval);
+        close();
+        showToast('Workout discarded');
+        renderWorkoutStart(container);
+      });
+      document.querySelector('#modal-cancel')?.addEventListener('click', close);
+      document.querySelector('#modal-cancel2')?.addEventListener('click', close);
+    }, 50);
+  });
+
+  container.querySelector('#workout-notes').addEventListener('input', (e) => {
+    activeWorkout.notes = e.target.value;
+    store.setActiveWorkout(activeWorkout);
+  });
+}
+
+function renderExercises(container, settings) {
+  const list = container.querySelector('#exercises-list');
+  const unit = settings.weightUnit || 'kg';
+
+  list.innerHTML = activeWorkout.exercises.map((ex, exIdx) => `
+    <div class="exercise-block" data-exercise="${exIdx}">
+      <div class="exercise-block-header">
+        <div>
+          <div class="exercise-block-name">${ex.name}</div>
+          <div class="exercise-block-category">${ex.category}</div>
+        </div>
+        <button class="btn btn-sm btn-ghost remove-exercise" data-idx="${exIdx}">Remove</button>
+      </div>
+      <div class="exercise-block-body">
+        <div class="set-header">
+          <span>Set</span>
+          <span>${unit}</span>
+          <span>Reps</span>
+          <span></span>
+        </div>
+        ${ex.sets.map((set, setIdx) => `
+          <div class="set-row">
+            <span class="set-number">${setIdx + 1}</span>
+            <input type="number" class="input set-weight" data-ex="${exIdx}" data-set="${setIdx}"
+              value="${set.weight || ''}" placeholder="0" min="0" inputmode="decimal">
+            <input type="number" class="input set-reps" data-ex="${exIdx}" data-set="${setIdx}"
+              value="${set.reps || ''}" placeholder="0" min="0" inputmode="numeric">
+            <button class="set-check ${set.completed ? 'checked' : ''}" data-ex="${exIdx}" data-set="${setIdx}">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+          </div>
+        `).join('')}
+        <button class="add-set-btn" data-ex="${exIdx}">+ Add Set</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Bind events
+  list.querySelectorAll('.set-weight').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const ex = parseInt(e.target.dataset.ex);
+      const set = parseInt(e.target.dataset.set);
+      activeWorkout.exercises[ex].sets[set].weight = parseFloat(e.target.value) || 0;
+      store.setActiveWorkout(activeWorkout);
+    });
+  });
+
+  list.querySelectorAll('.set-reps').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const ex = parseInt(e.target.dataset.ex);
+      const set = parseInt(e.target.dataset.set);
+      activeWorkout.exercises[ex].sets[set].reps = parseInt(e.target.value) || 0;
+      store.setActiveWorkout(activeWorkout);
+    });
+  });
+
+  list.querySelectorAll('.set-check').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ex = parseInt(btn.dataset.ex);
+      const set = parseInt(btn.dataset.set);
+      activeWorkout.exercises[ex].sets[set].completed = !activeWorkout.exercises[ex].sets[set].completed;
+      btn.classList.toggle('checked');
+      store.setActiveWorkout(activeWorkout);
+    });
+  });
+
+  list.querySelectorAll('.add-set-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIdx = parseInt(btn.dataset.ex);
+      const lastSet = activeWorkout.exercises[exIdx].sets.at(-1);
+      activeWorkout.exercises[exIdx].sets.push({
+        reps: lastSet?.reps || 10,
+        weight: lastSet?.weight || 0,
+        completed: false
+      });
+      store.setActiveWorkout(activeWorkout);
+      renderExercises(container, settings);
+    });
+  });
+
+  list.querySelectorAll('.remove-exercise').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx);
+      activeWorkout.exercises.splice(idx, 1);
+      store.setActiveWorkout(activeWorkout);
+      renderExercises(container, settings);
+    });
+  });
+}
+
+function showExercisePicker(container, settings) {
+  const el = document.createElement('div');
+  let filterCategory = 'all';
+  let searchQuery = '';
+
+  function render() {
+    const filtered = exerciseDB.filter(ex => {
+      const matchCat = filterCategory === 'all' || ex.category === filterCategory;
+      const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    });
+
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Add Exercise</h3>
+        <button class="modal-close" id="picker-close">&times;</button>
+      </div>
+      <div class="exercise-search mb-12">
+        <svg class="exercise-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" class="input" id="exercise-search" placeholder="Search exercises..." value="${searchQuery}">
+      </div>
+      <div class="chip-group mb-16">
+        ${categories.map(c => `
+          <button class="chip ${c.id === filterCategory ? 'active' : ''}" data-cat="${c.id}">${c.name}</button>
+        `).join('')}
+      </div>
+      <div style="max-height:300px;overflow-y:auto">
+        ${filtered.map(ex => `
+          <div class="list-item exercise-pick" data-name="${ex.name}" data-cat="${ex.category}">
+            <div class="list-item-content">
+              <div class="list-item-title">${ex.name}</div>
+              <div class="list-item-subtitle">${ex.category}</div>
+            </div>
+          </div>
+        `).join('')}
+        <div class="list-item exercise-pick" data-name="custom" data-cat="custom">
+          <div class="list-item-content">
+            <div class="list-item-title text-accent">+ Custom Exercise</div>
+            <div class="list-item-subtitle">Add your own exercise</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  render();
+  const close = showModal(el);
+
+  // Delayed binding because modal animation
+  setTimeout(() => {
+    el.querySelector('#picker-close')?.addEventListener('click', close);
+
+    el.querySelector('#exercise-search')?.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      render();
+      rebind();
+    });
+
+    function rebind() {
+      el.querySelectorAll('[data-cat]').forEach(chip => {
+        chip.addEventListener('click', () => {
+          filterCategory = chip.dataset.cat;
+          render();
+          rebind();
+        });
+      });
+
+      el.querySelectorAll('.exercise-pick').forEach(item => {
+        item.addEventListener('click', () => {
+          if (item.dataset.name === 'custom') {
+            const name = prompt('Exercise name:');
+            if (name?.trim()) {
+              addExerciseToWorkout(name.trim(), 'custom', container, settings);
+              close();
+            }
+          } else {
+            addExerciseToWorkout(item.dataset.name, item.dataset.cat, container, settings);
+            close();
+          }
+        });
+      });
+    }
+
+    rebind();
+  }, 100);
+}
+
+function addExerciseToWorkout(name, category, container, settings) {
+  activeWorkout.exercises.push({
+    name,
+    category,
+    sets: [{ reps: 10, weight: 0, completed: false }]
+  });
+  store.setActiveWorkout(activeWorkout);
+  renderExercises(container, settings);
+  showToast(`${name} added`);
+}
+
+function finishWorkout(container) {
+  activeWorkout.endTime = new Date().toISOString();
+  store.saveWorkout(activeWorkout);
+  store.clearActiveWorkout();
+
+  const close = showModal(`
+    <div class="text-center">
+      <div style="font-size:48px;margin-bottom:16px">&#127942;</div>
+      <h3 class="modal-title mb-8">Workout Complete!</h3>
+      <p class="text-muted mb-16">${activeWorkout.exercises.length} exercises · ${activeWorkout.exercises.reduce((a, e) => a + e.sets.filter(s => s.completed).length, 0)} sets completed</p>
+      <div class="flex gap-8">
+        <button class="btn btn-primary btn-block" id="finish-done">Done</button>
+        <button class="btn btn-secondary btn-block" id="finish-save-template">Save as Template</button>
+      </div>
+    </div>
+  `);
+
+  setTimeout(() => {
+    document.querySelector('#finish-done')?.addEventListener('click', () => {
+      close();
+      activeWorkout = null;
+      clearInterval(elapsedInterval);
+      renderWorkoutStart(container);
+    });
+
+    document.querySelector('#finish-save-template')?.addEventListener('click', () => {
+      const name = prompt('Template name:', 'My Workout');
+      if (name?.trim()) {
+        store.saveTemplate({
+          id: generateId('t_'),
+          name: name.trim(),
+          exercises: activeWorkout.exercises.map(ex => ({
+            name: ex.name,
+            category: ex.category,
+            targetSets: ex.sets.length,
+            targetReps: ex.sets[0]?.reps || 10
+          }))
+        });
+        showToast('Template saved!');
+      }
+      close();
+      activeWorkout = null;
+      clearInterval(elapsedInterval);
+      renderWorkoutStart(container);
+    });
+  }, 100);
+}
+
+function startElapsedTimer(container) {
+  const el = container.querySelector('#elapsed-time');
+  if (!el) return;
+
+  function update() {
+    const elapsed = Math.floor((Date.now() - startTimestamp) / 1000);
+    el.textContent = formatTime(elapsed);
+  }
+
+  update();
+  elapsedInterval = setInterval(update, 1000);
+}

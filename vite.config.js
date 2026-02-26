@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.svg', 'favicon-32x32.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'FitCoach - Workout Tracker',
         short_name: 'FitCoach',
@@ -19,28 +19,34 @@ export default defineConfig({
         scope: '/fitness-coach/',
         icons: [
           {
-            src: 'pwa-192x192.svg',
+            src: 'pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any'
           },
           {
-            src: 'pwa-512x512.svg',
+            src: 'pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any'
           },
           {
-            src: 'pwa-512x512.svg',
+            src: 'pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'maskable'
+          },
+          {
+            src: 'pwa-192x192.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any'
           }
         ],
         categories: ['fitness', 'health', 'lifestyle']
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,mp3,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,mp3,woff2}'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

@@ -33,6 +33,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
   showInstallBanner();
 });
 
+// Detect iOS Safari (no beforeinstallprompt support)
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+  window.navigator.standalone === true;
+
+if (isIOS && !isStandalone) {
+  // Show iOS-specific install banner after a short delay
+  const dismissed = sessionStorage.getItem('ios-install-dismissed');
+  if (!dismissed) {
+    setTimeout(() => showIOSInstallBanner(), 2000);
+  }
+}
+
 function showInstallBanner() {
   // Only show if not already installed
   if (window.matchMedia('(display-mode: standalone)').matches) return;
@@ -71,6 +85,40 @@ function showInstallBanner() {
   });
 
   banner.querySelector('#dismiss-btn').addEventListener('click', () => {
+    banner.remove();
+  });
+}
+
+function showIOSInstallBanner() {
+  // Don't show if already installed as standalone
+  if (window.navigator.standalone) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'card';
+  banner.style.cssText = `
+    position: fixed; bottom: 80px; left: 16px; right: 16px; z-index: 150;
+    max-width: 568px; margin: 0 auto;
+    border-color: var(--accent); animation: page-fade-in 0.3s ease;
+  `;
+  banner.innerHTML = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div>
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px">Install FitCoach</div>
+        <div style="font-size:13px;color:var(--text-muted);line-height:1.4">
+          Tap the
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin:0 2px">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+          Share button, then <strong>Add to Home Screen</strong>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="ios-dismiss" style="flex-shrink:0">&times;</button>
+    </div>
+  `;
+  document.body.appendChild(banner);
+
+  banner.querySelector('#ios-dismiss').addEventListener('click', () => {
+    sessionStorage.setItem('ios-install-dismissed', '1');
     banner.remove();
   });
 }

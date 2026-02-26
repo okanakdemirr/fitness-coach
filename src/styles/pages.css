@@ -885,9 +885,9 @@
 /* ===== REST TIMER POPUP ===== */
 .rest-timer-popup {
   position: fixed;
-  bottom: 80px;
-  left: 16px;
-  right: 16px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  left: calc(16px + env(safe-area-inset-left, 0px));
+  right: calc(16px + env(safe-area-inset-right, 0px));
   max-width: 400px;
   margin: 0 auto;
   z-index: 150;

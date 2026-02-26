@@ -25,8 +25,8 @@
         </svg>
       </a>
     </header>
-    <main id="page-content"></main>
-    <nav id="bottom-nav">
+    <main id="page-content" role="main"></main>
+    <nav id="bottom-nav" role="navigation" aria-label="Main navigation">
       <a href="#/" class="nav-item" data-page="dashboard">
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -65,8 +65,8 @@
       </a>
     </nav>
   </div>
-  <div id="modal-overlay" class="hidden"></div>
-  <div id="toast-container"></div>
+  <div id="modal-overlay" class="hidden" aria-hidden="true"></div>
+  <div id="toast-container" role="status" aria-live="polite"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

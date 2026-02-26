@@ -49,41 +49,97 @@ export function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
+/**
+ * Escapes HTML special characters to prevent XSS when interpolating
+ * user-provided strings into HTML templates.
+ */
+export function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 export function showToast(message, type = 'success') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.textContent = message;
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
   container.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
 }
 
+// Track active modal close handler for cleanup
+let activeModalCloseHandler = null;
+
 export function showModal(content) {
   const overlay = document.getElementById('modal-overlay');
+
+  // Clean up previous modal listener
+  if (activeModalCloseHandler) {
+    overlay.removeEventListener('click', activeModalCloseHandler);
+    activeModalCloseHandler = null;
+  }
+
   overlay.innerHTML = '';
   const modal = document.createElement('div');
   modal.className = 'modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-modal', 'true');
+
   if (typeof content === 'string') {
     modal.innerHTML = content;
   } else {
     modal.appendChild(content);
   }
+
+  // Set aria-labelledby from first heading
+  const heading = modal.querySelector('.modal-title, h3, h2');
+  if (heading) {
+    const headingId = heading.id || `modal-heading-${Date.now()}`;
+    heading.id = headingId;
+    modal.setAttribute('aria-labelledby', headingId);
+  }
+
   overlay.appendChild(modal);
   overlay.classList.remove('hidden');
-  // Trigger animation
   requestAnimationFrame(() => overlay.classList.add('visible'));
+
+  // Trap focus inside modal
+  const previousFocus = document.activeElement;
 
   const closeModal = () => {
     overlay.classList.remove('visible');
+    overlay.removeEventListener('click', activeModalCloseHandler);
+    document.removeEventListener('keydown', escKeyHandler);
+    activeModalCloseHandler = null;
     setTimeout(() => {
       overlay.classList.add('hidden');
       overlay.innerHTML = '';
+      // Return focus to the element that opened the modal
+      if (previousFocus && previousFocus.focus) {
+        previousFocus.focus();
+      }
     }, 300);
   };
 
-  overlay.addEventListener('click', (e) => {
+  activeModalCloseHandler = (e) => {
     if (e.target === overlay) closeModal();
-  });
+  };
+
+  const escKeyHandler = (e) => {
+    if (e.key === 'Escape') closeModal();
+  };
+
+  overlay.addEventListener('click', activeModalCloseHandler);
+  document.addEventListener('keydown', escKeyHandler);
+
+  // Auto-focus first focusable element in modal
+  setTimeout(() => {
+    const focusable = modal.querySelector('input, button, select, textarea, [tabindex]');
+    if (focusable) focusable.focus();
+  }, 100);
 
   return closeModal;
 }
@@ -132,10 +188,12 @@ let wakeLock = null;
 export async function requestWakeLock() {
   try {
     if ('wakeLock' in navigator) {
+      // Release existing lock before requesting a new one
+      if (wakeLock) await releaseWakeLock();
       wakeLock = await navigator.wakeLock.request('screen');
     }
   } catch {
-    // Wake lock not available
+    // Wake lock not available or denied
   }
 }
 

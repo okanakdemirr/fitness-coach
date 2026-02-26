@@ -36,11 +36,21 @@ function resolve() {
     }
   }
 
-  // Update nav active state
+  // Update nav active state and aria-current
   document.querySelectorAll('.nav-item').forEach(item => {
     const href = item.getAttribute('href')?.slice(1) || '/';
-    item.classList.toggle('active', href === path);
+    const isActive = href === path;
+    item.classList.toggle('active', isActive);
+    if (isActive) {
+      item.setAttribute('aria-current', 'page');
+    } else {
+      item.removeAttribute('aria-current');
+    }
   });
+
+  // Toggle modal overlay aria-hidden based on visibility
+  const overlay = document.getElementById('modal-overlay');
+  if (overlay) overlay.setAttribute('aria-hidden', 'true');
 }
 
 export function startRouter() {

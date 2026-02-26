@@ -44,6 +44,10 @@ export function timerPage(container) {
   return () => {
     stopTimer();
     releaseWakeLock();
+    // Reset module state to avoid stale data on re-entry
+    timeLeft = 0;
+    totalTime = 0;
+    isRunning = false;
   };
 }
 
@@ -200,7 +204,7 @@ function renderTimerCircle(label = '') {
           stroke-dasharray="${CIRCLE_CIRCUMFERENCE}" stroke-dashoffset="0"/>
       </svg>
       <div class="timer-display">
-        <div class="timer-time" id="timer-time">00:00</div>
+        <div class="timer-time" id="timer-time" aria-live="off" aria-atomic="true">00:00</div>
         <div class="timer-label" id="timer-label">${label}</div>
       </div>
     </div>
@@ -210,13 +214,13 @@ function renderTimerCircle(label = '') {
 function renderControls() {
   return `
     <div class="timer-controls">
-      <button class="timer-control-btn reset" id="btn-reset" title="Reset">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <button class="timer-control-btn reset" id="btn-reset" title="Reset" aria-label="Reset timer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <path d="M3 12a9 9 0 1 1 9 9 9 9 0 0 1-6.36-2.64"/>
           <path d="M3 3v9h9"/>
         </svg>
       </button>
-      <button class="timer-control-btn play" id="btn-play" title="Start">
+      <button class="timer-control-btn play" id="btn-play" title="Start" aria-label="Start timer">
         <svg viewBox="0 0 24 24" fill="currentColor">
           <polygon points="6,3 20,12 6,21"/>
         </svg>

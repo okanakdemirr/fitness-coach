@@ -186,19 +186,39 @@ export function settingsPage(container) {
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Reject files larger than 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('File too large (max 10MB)', 'error');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
         const data = JSON.parse(evt.target.result);
-        if (data.workouts) store.set('workouts', data.workouts);
-        if (data.templates) store.set('templates', data.templates);
-        if (data.bodyStats) store.set('bodyStats', data.bodyStats);
-        if (data.settings) store.set('settings', data.settings);
+
+        // Validate imported data structure
+        if (data.workouts && Array.isArray(data.workouts)) {
+          store.set('workouts', data.workouts.slice(0, 10000));
+        }
+        if (data.templates && Array.isArray(data.templates)) {
+          store.set('templates', data.templates.slice(0, 500));
+        }
+        if (data.bodyStats && Array.isArray(data.bodyStats)) {
+          store.set('bodyStats', data.bodyStats.slice(0, 5000));
+        }
+        if (data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)) {
+          store.set('settings', data.settings);
+        }
         showToast('Data imported successfully!');
         settingsPage(container); // Refresh
       } catch {
         showToast('Invalid backup file', 'error');
       }
+    };
+    reader.onerror = () => {
+      showToast('Failed to read file', 'error');
     };
     reader.readAsText(file);
   });

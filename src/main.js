@@ -59,8 +59,12 @@ function showInstallBanner() {
 
   banner.querySelector('#install-btn').addEventListener('click', async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
+      try {
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+      } catch {
+        // User cancelled or prompt failed
+      }
       deferredPrompt = null;
     }
     banner.remove();
@@ -71,11 +75,30 @@ function showInstallBanner() {
   });
 }
 
-// Register service worker (handled by vite-plugin-pwa but log status)
+// Register service worker and handle updates
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.ready.then(() => {
+    navigator.serviceWorker.ready.then((registration) => {
       console.log('FitCoach PWA is ready for offline use');
+
+      // Check for updates periodically
+      setInterval(() => registration.update(), 60000);
+    });
+
+    // Notify user when a new version activates
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      // Show a simple toast via DOM since import may not be available
+      const container = document.getElementById('toast-container');
+      if (container) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = 'App updated! Refresh for latest version.';
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+      }
     });
   });
 }

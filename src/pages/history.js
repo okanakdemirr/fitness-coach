@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { formatDate, formatDateFull, formatDuration, showModal } from '../utils.js';
+import { formatDate, formatDateFull, formatDuration, showModal, escapeHtml } from '../utils.js';
 
 export function historyPage(container) {
   const workouts = store.getWorkouts();
@@ -48,7 +48,7 @@ export function historyPage(container) {
               <span class="workout-summary-time">${formatDuration(w.startTime, w.endTime)}</span>
             </div>
             <div class="workout-summary-exercises">
-              ${w.exercises.map(ex => `<span class="workout-summary-exercise">${ex.name}</span>`).join('')}
+              ${w.exercises.map(ex => `<span class="workout-summary-exercise">${escapeHtml(ex.name)}</span>`).join('')}
             </div>
             ${w.exercises.length > 0 ? `
               <div class="text-sm text-muted mt-8">
@@ -95,10 +95,10 @@ function showWorkoutDetail(workout, unit, container) {
       <div class="badge badge-accent">${formatDuration(workout.startTime, workout.endTime)}</div>
       <span class="text-sm text-muted">${workout.exercises.reduce((a, e) => a + e.sets.filter(s => s.completed).length, 0)} sets</span>
     </div>
-    ${workout.notes ? `<p class="text-sm text-muted mb-16">"${workout.notes}"</p>` : ''}
+    ${workout.notes ? `<p class="text-sm text-muted mb-16">"${escapeHtml(workout.notes)}"</p>` : ''}
     ${workout.exercises.map(ex => `
       <div class="card mb-8">
-        <div class="font-bold mb-8">${ex.name} <span class="text-sm text-muted">${ex.category}</span></div>
+        <div class="font-bold mb-8">${escapeHtml(ex.name)} <span class="text-sm text-muted">${escapeHtml(ex.category)}</span></div>
         <div class="set-header">
           <span>Set</span>
           <span>${unit}</span>

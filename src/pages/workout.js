@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { exercises as exerciseDB, categories } from '../data/exercises.js';
-import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep } from '../utils.js';
+import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep, escapeHtml } from '../utils.js';
 
 let activeWorkout = null;
 let elapsedInterval = null;
@@ -21,6 +21,7 @@ export function workoutPage(container) {
     clearInterval(restTimerInterval);
     elapsedInterval = null;
     restTimerInterval = null;
+    startTimestamp = null;
     dismissRestTimer();
   };
 }
@@ -42,8 +43,8 @@ function renderWorkoutStart(container) {
       <p class="section-title">Templates</p>
       ${templates.map(t => `
         <div class="template-card" data-template="${t.id}">
-          <div class="template-name">${t.name}</div>
-          <div class="template-exercises">${t.exercises.map(e => e.name).join(' · ')}</div>
+          <div class="template-name">${escapeHtml(t.name)}</div>
+          <div class="template-exercises">${t.exercises.map(e => escapeHtml(e.name)).join(' · ')}</div>
           <div class="template-actions">
             <button class="btn btn-sm btn-primary start-template" data-id="${t.id}">Start</button>
             <button class="btn btn-sm btn-danger delete-template" data-id="${t.id}">Delete</button>
@@ -191,7 +192,7 @@ function renderExercises(container, settings) {
     <div class="exercise-block" data-exercise="${exIdx}">
       <div class="exercise-block-header">
         <div>
-          <div class="exercise-block-name">${ex.name}</div>
+          <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
           <div class="exercise-block-category">${ex.category}</div>
         </div>
         <button class="btn btn-sm btn-ghost remove-exercise" data-idx="${exIdx}">Remove</button>
@@ -225,18 +226,24 @@ function renderExercises(container, settings) {
   // Bind events
   list.querySelectorAll('.set-weight').forEach(input => {
     input.addEventListener('change', (e) => {
-      const ex = parseInt(e.target.dataset.ex);
-      const set = parseInt(e.target.dataset.set);
-      activeWorkout.exercises[ex].sets[set].weight = parseFloat(e.target.value) || 0;
+      const ex = parseInt(e.target.dataset.ex, 10);
+      const set = parseInt(e.target.dataset.set, 10);
+      let val = parseFloat(e.target.value) || 0;
+      val = Math.max(0, Math.min(val, 9999));
+      e.target.value = val || '';
+      activeWorkout.exercises[ex].sets[set].weight = val;
       store.setActiveWorkout(activeWorkout);
     });
   });
 
   list.querySelectorAll('.set-reps').forEach(input => {
     input.addEventListener('change', (e) => {
-      const ex = parseInt(e.target.dataset.ex);
-      const set = parseInt(e.target.dataset.set);
-      activeWorkout.exercises[ex].sets[set].reps = parseInt(e.target.value) || 0;
+      const ex = parseInt(e.target.dataset.ex, 10);
+      const set = parseInt(e.target.dataset.set, 10);
+      let val = parseInt(e.target.value, 10) || 0;
+      val = Math.max(0, Math.min(val, 9999));
+      e.target.value = val || '';
+      activeWorkout.exercises[ex].sets[set].reps = val;
       store.setActiveWorkout(activeWorkout);
     });
   });
@@ -356,7 +363,8 @@ function showExercisePicker(container, settings) {
           if (item.dataset.name === 'custom') {
             const name = prompt('Exercise name:');
             if (name?.trim()) {
-              addExerciseToWorkout(name.trim(), 'custom', container, settings);
+              const cleaned = name.trim().slice(0, 100);
+              addExerciseToWorkout(cleaned, 'custom', container, settings);
               close();
             }
           } else {
@@ -410,9 +418,10 @@ function finishWorkout(container) {
     document.querySelector('#finish-save-template')?.addEventListener('click', () => {
       const name = prompt('Template name:', 'My Workout');
       if (name?.trim()) {
+        const templateName = name.trim().slice(0, 100);
         store.saveTemplate({
           id: generateId('t_'),
-          name: name.trim(),
+          name: templateName,
           exercises: activeWorkout.exercises.map(ex => ({
             name: ex.name,
             category: ex.category,

@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { formatDate, formatDuration, todayStr } from '../utils.js';
+import { formatDate, formatDuration, todayStr, escapeHtml } from '../utils.js';
 
 export function dashboardPage(container) {
   const settings = store.getSettings();
@@ -117,7 +117,7 @@ export function dashboardPage(container) {
         </div>
         ${todayWorkout.exercises.map(ex => `
           <div class="text-sm mb-8">
-            <span class="font-bold">${ex.name}</span>
+            <span class="font-bold">${escapeHtml(ex.name)}</span>
             <span class="text-muted"> — ${ex.sets.filter(s => s.completed).length} sets</span>
           </div>
         `).join('')}
@@ -208,7 +208,7 @@ function getRecentWorkouts(workouts) {
           <span class="workout-summary-time">${formatDuration(w.startTime, w.endTime)}</span>
         </div>
         <div class="workout-summary-exercises">
-          ${w.exercises.map(ex => `<span class="workout-summary-exercise">${ex.name}</span>`).join('')}
+          ${w.exercises.map(ex => `<span class="workout-summary-exercise">${escapeHtml(ex.name)}</span>`).join('')}
         </div>
       </div>
     `).join('')}

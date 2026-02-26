@@ -1,4 +1,5 @@
 import { store } from '../store.js';
+import { escapeHtml } from '../utils.js';
 
 export function statsPage(container) {
   const workouts = store.getWorkouts();
@@ -145,7 +146,7 @@ export function statsPage(container) {
       <div class="card mb-24">
         ${topRecords.map(([name, weight]) => `
           <div class="flex items-center justify-between" style="padding:8px 0">
-            <span class="font-bold">${name}</span>
+            <span class="font-bold">${escapeHtml(name)}</span>
             <span class="text-accent font-bold">${weight} ${unit}</span>
           </div>
         `).join('')}

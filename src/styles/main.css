@@ -83,8 +83,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-height);
-  padding: 0 16px;
+  height: calc(var(--header-height) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) calc(16px + env(safe-area-inset-right, 0px)) 0 calc(16px + env(safe-area-inset-left, 0px));
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
 }
@@ -112,8 +112,7 @@ body {
 
 #page-content {
   flex: 1;
-  padding: 16px;
-  padding-bottom: calc(var(--nav-height) + 16px);
+  padding: 16px calc(16px + env(safe-area-inset-right, 0px)) calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 16px) calc(16px + env(safe-area-inset-left, 0px));
   max-width: 600px;
   width: 100%;
   margin: 0 auto;
@@ -129,10 +128,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  height: var(--nav-height);
+  height: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 0 env(safe-area-inset-left, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-right, 0px);
 }
 
 .nav-item {
@@ -161,7 +160,7 @@ body {
 /* ===== TOAST ===== */
 #toast-container {
   position: fixed;
-  top: calc(var(--header-height) + 8px);
+  top: calc(var(--header-height) + env(safe-area-inset-top, 0px) + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -224,7 +223,7 @@ body {
   max-width: 500px;
   max-height: 85vh;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  padding: 24px;
+  padding: 24px calc(24px + env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) calc(24px + env(safe-area-inset-left, 0px));
   overflow-y: auto;
   transform: translateY(100%);
   transition: transform 0.3s ease;

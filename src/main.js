@@ -54,7 +54,7 @@ function showInstallBanner() {
   const banner = document.createElement('div');
   banner.className = 'card';
   banner.style.cssText = `
-    position: fixed; bottom: 80px; left: 16px; right: 16px; z-index: 150;
+    position: fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); z-index: 150;
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; max-width: 568px; margin: 0 auto;
     border-color: var(--accent); animation: page-fade-in 0.3s ease;
@@ -96,7 +96,7 @@ function showIOSInstallBanner() {
   const banner = document.createElement('div');
   banner.className = 'card';
   banner.style.cssText = `
-    position: fixed; bottom: 80px; left: 16px; right: 16px; z-index: 150;
+    position: fixed; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); left: calc(16px + env(safe-area-inset-left, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); z-index: 150;
     max-width: 568px; margin: 0 auto;
     border-color: var(--accent); animation: page-fade-in 0.3s ease;
   `;

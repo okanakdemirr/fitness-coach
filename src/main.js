@@ -1,3 +1,6 @@
+import './styles/main.css';
+import './styles/components.css';
+import './styles/pages.css';
 import { route, startRouter } from './router.js';
 import { store } from './store.js';
 import { dashboardPage } from './pages/dashboard.js';

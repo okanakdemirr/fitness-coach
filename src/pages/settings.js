@@ -58,6 +58,15 @@ export function settingsPage(container) {
           <span class="toggle-slider"></span>
         </label>
       </div>
+      <div class="settings-item">
+        <div>
+          <div class="settings-item-label">Weekly Goal</div>
+          <div class="settings-item-desc">Workouts per week target</div>
+        </div>
+        <select class="input" id="weekly-goal" style="width:70px;padding:8px">
+          ${[2,3,4,5,6,7].map(n => `<option value="${n}" ${(settings.weeklyGoal || 4) === n ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </div>
     </div>
 
     <p class="section-title">Body Stats</p>
@@ -131,6 +140,12 @@ export function settingsPage(container) {
   // Sound toggle
   container.querySelector('#toggle-sound').addEventListener('change', (e) => {
     store.updateSettings({ soundEnabled: e.target.checked });
+  });
+
+  // Weekly goal
+  container.querySelector('#weekly-goal').addEventListener('change', (e) => {
+    store.updateSettings({ weeklyGoal: parseInt(e.target.value) });
+    showToast(`Weekly goal set to ${e.target.value}`);
   });
 
   // Log weight

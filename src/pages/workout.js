@@ -1,10 +1,11 @@
 import { store } from '../store.js';
 import { exercises as exerciseDB, categories } from '../data/exercises.js';
-import { generateId, todayStr, showToast, showModal, formatTime } from '../utils.js';
+import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep } from '../utils.js';
 
 let activeWorkout = null;
 let elapsedInterval = null;
 let startTimestamp = null;
+let restTimerInterval = null;
 
 export function workoutPage(container) {
   activeWorkout = store.getActiveWorkout();
@@ -17,7 +18,10 @@ export function workoutPage(container) {
 
   return () => {
     clearInterval(elapsedInterval);
+    clearInterval(restTimerInterval);
     elapsedInterval = null;
+    restTimerInterval = null;
+    dismissRestTimer();
   };
 }
 
@@ -241,9 +245,16 @@ function renderExercises(container, settings) {
     btn.addEventListener('click', () => {
       const ex = parseInt(btn.dataset.ex);
       const set = parseInt(btn.dataset.set);
-      activeWorkout.exercises[ex].sets[set].completed = !activeWorkout.exercises[ex].sets[set].completed;
+      const wasCompleted = activeWorkout.exercises[ex].sets[set].completed;
+      activeWorkout.exercises[ex].sets[set].completed = !wasCompleted;
       btn.classList.toggle('checked');
       store.setActiveWorkout(activeWorkout);
+
+      // Auto-start rest timer when completing a set (not uncompleting)
+      if (!wasCompleted) {
+        const restTime = settings.defaultRestTime || 90;
+        showRestTimerPopup(restTime);
+      }
     });
   });
 
@@ -430,4 +441,80 @@ function startElapsedTimer(container) {
 
   update();
   elapsedInterval = setInterval(update, 1000);
+}
+
+// ===== REST TIMER POPUP =====
+function showRestTimerPopup(seconds) {
+  dismissRestTimer();
+
+  let timeLeft = seconds;
+  const totalTime = seconds;
+
+  // Create floating rest timer
+  const popup = document.createElement('div');
+  popup.id = 'rest-timer-popup';
+  popup.className = 'rest-timer-popup';
+  popup.innerHTML = `
+    <div class="rest-timer-header">
+      <span class="rest-timer-title">Rest</span>
+      <button class="rest-timer-dismiss" id="rest-dismiss">&times;</button>
+    </div>
+    <div class="rest-timer-time" id="rest-time">${formatTime(timeLeft)}</div>
+    <div class="rest-timer-bar">
+      <div class="rest-timer-fill" id="rest-fill"></div>
+    </div>
+    <div class="rest-timer-actions">
+      <button class="rest-timer-btn" data-add="-15">-15s</button>
+      <button class="rest-timer-btn" data-add="15">+15s</button>
+      <button class="rest-timer-btn rest-skip" id="rest-skip">Skip</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+
+  // Animate in
+  requestAnimationFrame(() => popup.classList.add('visible'));
+
+  const timeEl = popup.querySelector('#rest-time');
+  const fillEl = popup.querySelector('#rest-fill');
+
+  function updatePopup() {
+    timeEl.textContent = formatTime(Math.max(0, timeLeft));
+    const pct = (timeLeft / totalTime) * 100;
+    fillEl.style.width = `${Math.max(0, pct)}%`;
+  }
+
+  restTimerInterval = setInterval(() => {
+    timeLeft--;
+    updatePopup();
+
+    if (timeLeft <= 3 && timeLeft > 0) playBeep();
+
+    if (timeLeft <= 0) {
+      playTripleBeep();
+      dismissRestTimer();
+      showToast('Rest complete!');
+    }
+  }, 1000);
+
+  popup.querySelector('#rest-dismiss')?.addEventListener('click', dismissRestTimer);
+  popup.querySelector('#rest-skip')?.addEventListener('click', () => {
+    dismissRestTimer();
+    showToast('Rest skipped');
+  });
+  popup.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      timeLeft = Math.max(1, timeLeft + parseInt(btn.dataset.add));
+      updatePopup();
+    });
+  });
+}
+
+function dismissRestTimer() {
+  clearInterval(restTimerInterval);
+  restTimerInterval = null;
+  const popup = document.getElementById('rest-timer-popup');
+  if (popup) {
+    popup.classList.remove('visible');
+    setTimeout(() => popup.remove(), 200);
+  }
 }

@@ -89,6 +89,15 @@ export function showModal(content) {
 }
 
 export function playBeep() {
+  // Check sound setting before playing
+  try {
+    const raw = localStorage.getItem('fitcoach_settings');
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s.soundEnabled === false) return;
+    }
+  } catch { /* ignore */ }
+
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();

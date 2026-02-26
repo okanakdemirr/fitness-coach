@@ -6,6 +6,7 @@ import { workoutPage } from './pages/workout.js';
 import { historyPage } from './pages/history.js';
 import { statsPage } from './pages/stats.js';
 import { settingsPage } from './pages/settings.js';
+import { toolsPage } from './pages/tools.js';
 
 // Apply saved theme
 const settings = store.getSettings();
@@ -17,6 +18,7 @@ route('/timer', timerPage);
 route('/workout', workoutPage);
 route('/history', historyPage);
 route('/stats', statsPage);
+route('/tools', toolsPage);
 route('/settings', settingsPage);
 
 // Start the router

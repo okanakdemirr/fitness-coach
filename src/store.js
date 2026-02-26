@@ -95,7 +95,8 @@ export const store = {
       theme: 'dark',
       weightUnit: 'kg',
       defaultRestTime: 90,
-      soundEnabled: true
+      soundEnabled: true,
+      weeklyGoal: 4
     });
   },
 

@@ -48,6 +48,8 @@ export function dashboardPage(container) {
       </div>
     ` : ''}
 
+    ${renderWeeklyGoal(workoutsThisWeek, settings.weeklyGoal || 4)}
+
     <div class="stat-grid">
       <div class="stat-card">
         <div class="stat-value">${streak}</div>
@@ -96,13 +98,13 @@ export function dashboardPage(container) {
         </div>
         <span class="quick-action-label">History</span>
       </a>
-      <a href="#/stats" class="quick-action">
+      <a href="#/tools" class="quick-action">
         <div class="quick-action-icon" style="background: rgba(165,94,234,0.15)">
           <svg viewBox="0 0 24 24" fill="none" stroke="#a55eea" stroke-width="2">
-            <path d="M18 20V10M12 20V4M6 20v-6"/>
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
           </svg>
         </div>
-        <span class="quick-action-label">Stats</span>
+        <span class="quick-action-label">Tools</span>
       </a>
     </div>
 
@@ -163,6 +165,34 @@ function getTotalVolume(workouts, unit) {
 
   if (volume >= 1000) return `${(volume / 1000).toFixed(1)}k`;
   return String(volume);
+}
+
+function renderWeeklyGoal(current, goal) {
+  const pct = Math.min(1, current / goal);
+  const circumference = 2 * Math.PI * 40;
+  const offset = circumference * (1 - pct);
+  const goalMet = current >= goal;
+
+  return `
+    <div class="weekly-goal-card mb-24">
+      <div class="weekly-goal-ring">
+        <svg viewBox="0 0 100 100" width="80" height="80">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--bg-tertiary)" stroke-width="8"/>
+          <circle cx="50" cy="50" r="40" fill="none"
+            stroke="${goalMet ? 'var(--accent)' : 'var(--accent-secondary)'}"
+            stroke-width="8" stroke-linecap="round"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
+            transform="rotate(-90 50 50)"
+            style="transition: stroke-dashoffset 0.5s ease"/>
+        </svg>
+        <span class="weekly-goal-text">${current}/${goal}</span>
+      </div>
+      <div class="weekly-goal-info">
+        <div class="font-bold">${goalMet ? 'Goal reached!' : `${goal - current} more to go`}</div>
+        <div class="text-sm text-muted">Weekly workout goal</div>
+      </div>
+    </div>
+  `;
 }
 
 function getRecentWorkouts(workouts) {

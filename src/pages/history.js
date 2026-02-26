@@ -20,6 +20,12 @@ export function historyPage(container) {
     return;
   }
 
+  // Build workout date set for heatmap
+  const workoutDates = {};
+  workouts.forEach(w => {
+    workoutDates[w.date] = (workoutDates[w.date] || 0) + 1;
+  });
+
   // Group workouts by date
   const grouped = {};
   workouts.forEach(w => {
@@ -30,6 +36,8 @@ export function historyPage(container) {
   container.innerHTML = `
     <p class="page-title">History</p>
     <p class="text-muted mb-16">${workouts.length} workout${workouts.length !== 1 ? 's' : ''} logged</p>
+
+    ${renderCalendarHeatmap(workoutDates)}
     ${Object.entries(grouped).map(([date, dayWorkouts]) => `
       <div class="history-date-group">
         <div class="history-date">${formatDate(date)}</div>
@@ -122,4 +130,73 @@ function showWorkoutDetail(workout, unit, container) {
       historyPage(container);
     });
   }, 50);
+}
+
+// ===== CALENDAR HEATMAP =====
+function renderCalendarHeatmap(workoutDates) {
+  const today = new Date();
+  const weeks = 12; // Show last 12 weeks
+  const days = ['', 'M', '', 'W', '', 'F', ''];
+
+  // Build grid of dates (12 weeks back from today)
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - (weeks * 7) + (7 - startDate.getDay()));
+
+  let cells = '';
+  const date = new Date(startDate);
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Generate month labels
+  let monthLabels = '';
+  let lastMonth = -1;
+  for (let w = 0; w < weeks; w++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + w * 7);
+    const m = d.getMonth();
+    if (m !== lastMonth) {
+      monthLabels += `<span class="heatmap-month" style="grid-column:${w + 2}">${d.toLocaleDateString('en-US', { month: 'short' })}</span>`;
+      lastMonth = m;
+    }
+  }
+
+  // Generate cells
+  for (let dow = 0; dow < 7; dow++) {
+    for (let w = 0; w < weeks; w++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + w * 7 + dow);
+      const dateStr = d.toISOString().split('T')[0];
+      const count = workoutDates[dateStr] || 0;
+      const isFuture = dateStr > todayStr;
+      const isToday = dateStr === todayStr;
+
+      let level = 0;
+      if (count === 1) level = 1;
+      else if (count === 2) level = 2;
+      else if (count >= 3) level = 3;
+
+      cells += `<div class="heatmap-cell${isFuture ? ' future' : ''}${isToday ? ' today' : ''}" data-level="${isFuture ? '' : level}" title="${dateStr}: ${count} workout${count !== 1 ? 's' : ''}"></div>`;
+    }
+  }
+
+  return `
+    <div class="heatmap-container mb-24">
+      <div class="heatmap-months">${monthLabels}</div>
+      <div class="heatmap-grid">
+        <div class="heatmap-days">
+          ${days.map(d => `<span>${d}</span>`).join('')}
+        </div>
+        <div class="heatmap-cells">
+          ${cells}
+        </div>
+      </div>
+      <div class="heatmap-legend">
+        <span class="text-muted text-sm">Less</span>
+        <div class="heatmap-cell" data-level="0"></div>
+        <div class="heatmap-cell" data-level="1"></div>
+        <div class="heatmap-cell" data-level="2"></div>
+        <div class="heatmap-cell" data-level="3"></div>
+        <span class="text-muted text-sm">More</span>
+      </div>
+    </div>
+  `;
 }

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  base: '/fitness-coach/',
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -14,8 +15,8 @@ export default defineConfig({
         background_color: '#0f0f1a',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: '/fitness-coach/',
+        scope: '/fitness-coach/',
         icons: [
           {
             src: 'pwa-192x192.svg',

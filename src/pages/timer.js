@@ -360,7 +360,14 @@ function bindControls(el, getInitialValue, isInterval = false, mode = 'countdown
     // Fully reset display
     const timeEl = el.querySelector('#timer-time');
     if (timeEl) {
-      timeEl.textContent = '00:00';
+      // For rest mode, show the selected preset time; for others show 00:00
+      if (mode === 'rest') {
+        const timerContainer = el.querySelector('.timer-container');
+        const restTime = parseInt(timerContainer?.dataset.selectedRest, 10);
+        timeEl.textContent = restTime > 0 ? formatTime(restTime) : '00:00';
+      } else {
+        timeEl.textContent = '00:00';
+      }
       timeEl.classList.remove('timer-time-urgent');
     }
     const progressEl = el.querySelector('#timer-progress');
@@ -429,6 +436,15 @@ function updateDisplayFromState(container, state) {
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
+
+    // For rest mode, restore the selected rest time preview instead of showing 0:00
+    if (currentMode === 'rest' && timeEl) {
+      const timerContainer = el.querySelector('.timer-container');
+      const restTime = parseInt(timerContainer?.dataset.selectedRest, 10);
+      if (restTime > 0) {
+        timeEl.textContent = formatTime(restTime);
+      }
+    }
   }
 }
 

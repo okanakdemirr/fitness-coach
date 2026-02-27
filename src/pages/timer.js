@@ -108,6 +108,7 @@ function renderRest(el) {
 
   // Fixed presets in ascending order; highlight the one matching user's default
   const restPresets = [30, 60, 90, 120, 180, 300];
+  let selectedRest = defaultRest;
 
   el.innerHTML = `
     <div class="timer-container">
@@ -124,19 +125,17 @@ function renderRest(el) {
     </div>
   `;
 
-  // Bind chip selection (visual only — rest page has no min/sec inputs)
+  // Bind chip selection — update variable and visual state
   el.querySelectorAll('[data-seconds]').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('[data-seconds]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      selectedRest = parseInt(btn.dataset.seconds, 10);
     });
   });
 
-  // Read selected chip value when play is pressed
-  bindControls(el, () => {
-    const activeChip = el.querySelector('.chip.active[data-seconds]');
-    return activeChip ? parseInt(activeChip.dataset.seconds, 10) : defaultRest;
-  }, false, 'rest');
+  // Read selected rest duration from variable when play is pressed
+  bindControls(el, () => selectedRest, false, 'rest');
 
   if (globalTimer.isActive && globalTimer.mode === 'rest') {
     syncActiveState(el);
@@ -401,13 +400,19 @@ function updateDisplayFromState(container, state) {
     updateIntervalDisplay(el, state.intervalState);
   }
 
-  // Show setup when timer completes
+  // Always sync play/pause button with timer state
+  if (state.isRunning) {
+    updatePlayButton(el, true);
+  } else {
+    updatePlayButton(el, false);
+  }
+
+  // Show setup when timer completes or is stopped
   if (!state.isActive && !state.isRunning) {
     const setup = el.querySelector('#timer-setup');
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
-    updatePlayButton(el, false);
   }
 }
 

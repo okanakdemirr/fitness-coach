@@ -11,6 +11,40 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <title>FitCoach</title>
+  <style>
+    /* Critical inline CSS – guarantees styled first paint even if external CSS/JS fail to load */
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-tertiary:#252542;--bg-hover:#2d2d50;--accent:#00d4aa;--accent-dim:rgba(0,212,170,.12);--accent-secondary:#667eea;--text-primary:#e8e8f0;--text-secondary:#b8b8cc;--text-muted:#8a8a9e;--border:#2d2d4a;--danger:#ff6b6b;--danger-dim:rgba(255,107,107,.12);--warning:#ffd93d;--warning-dim:rgba(255,217,61,.12);--success:#00d4aa;--nav-height:72px;--header-height:56px;--radius:12px;--radius-sm:8px;--radius-lg:16px;--shadow:0 2px 8px rgba(0,0,0,.3);--transition:.2s ease}
+    [data-theme="light"]{--bg-primary:#f5f5f7;--bg-secondary:#fff;--bg-tertiary:#e8e8ec;--bg-hover:#dddde3;--text-primary:#1a1a2e;--text-secondary:#4a4a5e;--text-muted:#8a8a9e;--border:#d0d0da;--shadow:0 2px 8px rgba(0,0,0,.08)}
+    html{height:100%;-webkit-text-size-adjust:100%}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+    #app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+    #app-header{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) 16px 0;background:var(--bg-primary);border-bottom:1px solid var(--border)}
+    .header-title{font-size:20px;font-weight:800;color:var(--accent);letter-spacing:-.5px}
+    .header-btn{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--bg-tertiary);border:none;color:var(--text-secondary);cursor:pointer;text-decoration:none;transition:background var(--transition)}
+    #page-content{flex:1;padding:20px 16px calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 16px);max-width:600px;width:100%;margin:0 auto}
+    #bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-around;height:calc(var(--nav-height) + env(safe-area-inset-bottom,0px));padding:0 0 env(safe-area-inset-bottom,0px);background:var(--bg-secondary);border-top:1px solid var(--border)}
+    .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 12px;color:var(--text-muted);text-decoration:none;font-size:11px;font-weight:500;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
+    .nav-item.active,.nav-item[aria-current="page"]{color:var(--accent)}
+    .nav-icon{width:24px;height:24px}
+    .hidden{display:none!important}
+    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+    #modal-overlay.hidden{display:none}
+    .page-title{font-size:24px;font-weight:800;margin-bottom:20px;letter-spacing:-.5px}
+    .section-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+    .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted)}
+    .empty-state svg{width:64px;height:64px;margin-bottom:16px;opacity:.5}
+    .card{background:var(--bg-secondary);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#0f0f1a}
+    .btn-secondary{background:var(--bg-tertiary);color:var(--text-primary)}
+    .btn-ghost{background:transparent;color:var(--text-secondary);padding:8px 16px}
+    .btn-sm{padding:8px 16px;font-size:13px}
+    .btn-block{width:100%}
+    .toast{position:fixed;bottom:calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 16px);left:50%;transform:translateX(-50%);padding:12px 24px;background:var(--bg-tertiary);color:var(--text-primary);border-radius:20px;font-size:14px;font-weight:500;z-index:300;box-shadow:var(--shadow);white-space:nowrap}
+    @keyframes page-fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    #page-content>*{animation:page-fade-in .2s ease}
+  </style>
 </head>
 <body>
   <div id="app">

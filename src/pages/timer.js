@@ -124,8 +124,19 @@ function renderRest(el) {
     </div>
   `;
 
-  bindPresets(el);
-  bindControls(el, () => defaultRest, false, 'rest');
+  // Bind chip selection (visual only — rest page has no min/sec inputs)
+  el.querySelectorAll('[data-seconds]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('[data-seconds]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Read selected chip value when play is pressed
+  bindControls(el, () => {
+    const activeChip = el.querySelector('.chip.active[data-seconds]');
+    return activeChip ? parseInt(activeChip.dataset.seconds, 10) : defaultRest;
+  }, false, 'rest');
 
   if (globalTimer.isActive && globalTimer.mode === 'rest') {
     syncActiveState(el);

@@ -20,19 +20,9 @@ let intervalState = { round: 0, phase: 'prepare', totalRounds: 8 };
 // Listeners: any part of the app can subscribe to timer ticks
 const listeners = new Set();
 
-// ===== SHARED AUDIO HELPERS =====
-let audioCtx = null;
-
-function getAudioContext() {
-  if (!audioCtx || audioCtx.state === 'closed') {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  // Resume if suspended (browsers suspend until user gesture)
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
-  }
-  return audioCtx;
-}
+// ===== SOUND HELPERS =====
+// Each sound creates a fresh AudioContext to avoid browser suspension issues.
+// The context is closed after the sound finishes to free resources.
 
 function isSoundEnabled() {
   try {
@@ -45,21 +35,24 @@ function isSoundEnabled() {
   return true;
 }
 
-function playTone(frequency, duration, volume = 0.25, type = 'sine', startDelay = 0) {
+function createContext() {
+  return new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function playTone(frequency, duration, volume = 0.25, type = 'sine') {
   try {
-    const ctx = getAudioContext();
+    const ctx = createContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.frequency.value = frequency;
     osc.type = type;
-    const startAt = ctx.currentTime + startDelay;
-    gain.gain.setValueAtTime(0, startAt);
-    gain.gain.linearRampToValueAtTime(volume, startAt + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
-    osc.start(startAt);
-    osc.stop(startAt + duration);
+    gain.gain.value = volume;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.stop(ctx.currentTime + duration);
+    osc.onended = () => ctx.close();
   } catch { /* Audio not available */ }
 }
 
@@ -75,17 +68,60 @@ function playWarningBeep() {
 
 function playStartSound() {
   if (!isSoundEnabled()) return;
-  // Rising two-tone "go" sound
-  playTone(600, 0.15, 0.25);
-  playTone(900, 0.2, 0.25, 'sine', 0.15);
+  try {
+    const ctx = createContext();
+    // Rising two-tone "go" sound
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.frequency.value = 600;
+    osc1.type = 'sine';
+    gain1.gain.value = 0.25;
+    osc1.start();
+    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc1.stop(ctx.currentTime + 0.15);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.frequency.value = 900;
+    osc2.type = 'sine';
+    gain2.gain.value = 0.25;
+    osc2.start(ctx.currentTime + 0.15);
+    gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc2.stop(ctx.currentTime + 0.35);
+    // Close context after the last tone ends
+    osc2.onended = () => ctx.close();
+  } catch { /* Audio not available */ }
 }
 
 function playFinishSound() {
   if (!isSoundEnabled()) return;
-  // Triumphant ascending three-tone
-  playTone(700, 0.4, 0.3, 'sine', 0);
-  playTone(880, 0.4, 0.3, 'sine', 0.2);
-  playTone(1100, 0.4, 0.3, 'sine', 0.4);
+  try {
+    const ctx = createContext();
+    // Triumphant ascending three-tone
+    const freqs = [700, 880, 1100];
+    const delays = [0, 0.2, 0.4];
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      const startAt = ctx.currentTime + delays[i];
+      gain.gain.setValueAtTime(0, startAt);
+      gain.gain.linearRampToValueAtTime(0.3, startAt + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.4);
+      osc.start(startAt);
+      osc.stop(startAt + 0.4);
+      // Close on the last oscillator
+      if (i === 2) osc.onended = () => ctx.close();
+    });
+  } catch { /* Audio not available */ }
 }
 
 // ===== PUBLIC API =====

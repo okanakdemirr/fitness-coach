@@ -19,20 +19,6 @@ export function toolsPage(container) {
         <div class="tool-desc">Estimate your one-rep max</div>
       </div>
 
-      <div class="tool-card" id="tool-plate">
-        <div class="tool-icon" style="background: var(--warning-dim); color: var(--warning)">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="6" width="4" height="12" rx="1"/>
-            <rect x="18" y="6" width="4" height="12" rx="1"/>
-            <line x1="6" y1="12" x2="18" y2="12"/>
-            <rect x="6" y="8" width="3" height="8" rx="0.5"/>
-            <rect x="15" y="8" width="3" height="8" rx="0.5"/>
-          </svg>
-        </div>
-        <div class="tool-name">Plate Calculator</div>
-        <div class="tool-desc">What plates to load</div>
-      </div>
-
       <div class="tool-card" id="tool-bmi">
         <div class="tool-icon" style="background: rgba(165,94,234,0.15); color: #a55eea">
           <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
@@ -83,7 +69,6 @@ export function toolsPage(container) {
   `;
 
   container.querySelector('#tool-1rm').addEventListener('click', () => show1RMCalculator(unit));
-  container.querySelector('#tool-plate').addEventListener('click', () => showPlateCalculator(unit));
   container.querySelector('#tool-bmi').addEventListener('click', () => showBMICalculator(unit));
   container.querySelector('#tool-rm-table').addEventListener('click', () => showRMTable(unit));
   container.querySelector('#tool-progress').addEventListener('click', () => showExerciseProgress(unit));
@@ -168,97 +153,6 @@ function show1RMCalculator(unit) {
               <span class="font-bold text-accent">${Math.round(avg * r.pct / 100)} ${unit}</span>
             </div>
           `).join('')}
-        </div>
-      `;
-    });
-  }, 100);
-}
-
-// ===== PLATE CALCULATOR =====
-function showPlateCalculator(unit) {
-  const barWeight = unit === 'kg' ? 20 : 45;
-  const plates = unit === 'kg'
-    ? [25, 20, 15, 10, 5, 2.5, 1.25]
-    : [45, 35, 25, 10, 5, 2.5];
-
-  const el = document.createElement('div');
-
-  el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Plate Calculator</h3>
-      <button class="modal-close" id="close-plate">&times;</button>
-    </div>
-    <p class="text-muted text-sm mb-16">Shows plates needed per side (${barWeight} ${unit} bar).</p>
-    <div class="input-group">
-      <label class="input-label">Target weight (${unit})</label>
-      <input type="number" class="input" id="plate-target" placeholder="e.g. 100" inputmode="decimal">
-    </div>
-    <div class="input-group">
-      <label class="input-label">Bar weight (${unit})</label>
-      <input type="number" class="input" id="plate-bar" value="${barWeight}" inputmode="decimal">
-    </div>
-    <button class="btn btn-primary btn-block mb-16" id="calc-plates">Calculate</button>
-    <div id="plate-results"></div>
-  `;
-
-  const close = showModal(el);
-
-  setTimeout(() => {
-    el.querySelector('#close-plate')?.addEventListener('click', close);
-    el.querySelector('#calc-plates')?.addEventListener('click', () => {
-      const target = parseFloat(el.querySelector('#plate-target').value);
-      const bar = parseFloat(el.querySelector('#plate-bar').value) || barWeight;
-
-      if (!target || target <= bar) {
-        el.querySelector('#plate-results').innerHTML = `
-          <div class="card text-center text-muted">
-            ${target && target === bar ? 'Just the bar!' : 'Enter a weight greater than the bar.'}
-          </div>
-        `;
-        return;
-      }
-
-      let perSide = (target - bar) / 2;
-      const needed = [];
-      const plateColors = {
-        25: '#ff6b6b', 20: '#667eea', 15: '#ffd93d', 10: '#00d4aa',
-        5: '#ff9f43', 2.5: '#a55eea', 1.25: '#888',
-        45: '#667eea', 35: '#ffd93d'
-      };
-
-      for (const plate of plates) {
-        const count = Math.floor(perSide / plate);
-        if (count > 0) {
-          needed.push({ weight: plate, count });
-          perSide -= count * plate;
-        }
-      }
-
-      const remainder = Math.round(perSide * 100) / 100;
-
-      el.querySelector('#plate-results').innerHTML = `
-        <div class="card mb-12">
-          <div class="text-center mb-12">
-            <div class="stat-value">${target} ${unit}</div>
-            <div class="stat-label">Total weight</div>
-          </div>
-          ${needed.length === 0 ? '<p class="text-center text-muted">No plates needed</p>' : ''}
-          <p class="section-title">Per side:</p>
-          <div class="plate-visual">
-            ${needed.map(p => `
-              <div class="plate-row">
-                <div class="plate-display">
-                  ${Array.from({ length: p.count }, () => `
-                    <div class="plate-disc" style="background:${plateColors[p.weight] || 'var(--bg-tertiary)'}; height:${Math.max(24, Math.min(56, p.weight * 2.2))}px">
-                      ${p.weight}
-                    </div>
-                  `).join('')}
-                </div>
-                <span class="text-sm">${p.weight} ${unit} &times; ${p.count}</span>
-              </div>
-            `).join('')}
-          </div>
-          ${remainder > 0.01 ? `<p class="text-sm text-danger mt-8">Cannot make exact weight. ${remainder} ${unit} short per side.</p>` : ''}
         </div>
       `;
     });

@@ -10,6 +10,7 @@ import { historyPage } from './pages/history.js';
 import { statsPage } from './pages/stats.js';
 import { settingsPage } from './pages/settings.js';
 import { toolsPage } from './pages/tools.js';
+import { initFloatingTimer } from './floatingTimer.js';
 
 // Apply saved theme
 const settings = store.getSettings();
@@ -26,6 +27,9 @@ route('/settings', settingsPage);
 
 // Start the router
 startRouter();
+
+// Initialize the global floating timer widget
+initFloatingTimer();
 
 // PWA install prompt
 let deferredPrompt = null;

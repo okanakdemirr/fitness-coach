@@ -129,6 +129,11 @@
   font-weight: 500;
 }
 
+.timer-time-urgent {
+  color: var(--danger);
+  animation: pulse-red 1s infinite;
+}
+
 .timer-controls {
   display: flex;
   gap: 16px;
@@ -681,35 +686,6 @@
   color: var(--text-muted);
 }
 
-/* Plate calculator */
-.plate-visual {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.plate-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.plate-display {
-  display: flex;
-  gap: 4px;
-}
-
-.plate-disc {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  border-radius: 4px;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 /* BMI scale */
 .bmi-scale {
   position: relative;
@@ -978,4 +954,149 @@
   background: var(--accent-dim);
   color: var(--accent);
   border-color: var(--accent);
+}
+
+/* ===== FLOATING TIMER WIDGET ===== */
+.floating-timer {
+  position: fixed;
+  bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent);
+  border-radius: 60px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 212, 170, 0.15);
+  cursor: pointer;
+  animation: float-in 0.3s ease;
+  max-width: calc(100vw - 32px);
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(12px);
+}
+
+.floating-timer.hidden {
+  display: none !important;
+}
+
+@keyframes float-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.floating-timer-ring {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.floating-timer-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.floating-timer-bg {
+  fill: none;
+  stroke: var(--bg-tertiary);
+  stroke-width: 3;
+}
+
+.floating-timer-progress {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s linear;
+}
+
+.floating-timer-progress.warning {
+  stroke: var(--warning);
+}
+
+.floating-timer-progress.danger {
+  stroke: var(--danger);
+}
+
+.floating-timer-progress.prepare {
+  stroke: var(--accent-secondary);
+}
+
+.floating-timer-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.floating-timer-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.floating-timer-time {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.floating-timer-time.pulse-text {
+  animation: pulse-red 1s infinite;
+  color: var(--danger);
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.floating-timer-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floating-timer-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.floating-timer-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.floating-timer-btn:active {
+  transform: scale(0.9);
+}
+
+.floating-timer-btn.stop {
+  background: var(--danger-dim);
+  color: var(--danger);
 }

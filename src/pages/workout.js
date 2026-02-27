@@ -1,11 +1,13 @@
 import { store } from '../store.js';
 import { exercises as exerciseDB, categories } from '../data/exercises.js';
 import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep, escapeHtml } from '../utils.js';
+import { globalTimer } from '../globalTimer.js';
 
 let activeWorkout = null;
 let elapsedInterval = null;
 let startTimestamp = null;
 let restTimerInterval = null;
+let restTimerUnsubscribe = null;
 
 export function workoutPage(container) {
   activeWorkout = store.getActiveWorkout();
@@ -472,10 +474,10 @@ function startElapsedTimer(container) {
 function showRestTimerPopup(seconds) {
   dismissRestTimer();
 
-  let timeLeft = seconds;
-  const totalTime = seconds;
+  // Use the global timer for rest
+  globalTimer.startRest(seconds);
 
-  // Create floating rest timer
+  // Create floating rest timer popup
   const popup = document.createElement('div');
   popup.id = 'rest-timer-popup';
   popup.className = 'rest-timer-popup';
@@ -484,9 +486,9 @@ function showRestTimerPopup(seconds) {
       <span class="rest-timer-title">Rest</span>
       <button class="rest-timer-dismiss" id="rest-dismiss">&times;</button>
     </div>
-    <div class="rest-timer-time" id="rest-time">${formatTime(timeLeft)}</div>
+    <div class="rest-timer-time" id="rest-time">${formatTime(seconds)}</div>
     <div class="rest-timer-bar">
-      <div class="rest-timer-fill" id="rest-fill"></div>
+      <div class="rest-timer-fill" id="rest-fill" style="width:100%"></div>
     </div>
     <div class="rest-timer-actions">
       <button class="rest-timer-btn" data-add="-15">-15s</button>
@@ -502,39 +504,34 @@ function showRestTimerPopup(seconds) {
   const timeEl = popup.querySelector('#rest-time');
   const fillEl = popup.querySelector('#rest-fill');
 
-  function updatePopup() {
-    timeEl.textContent = formatTime(Math.max(0, timeLeft));
-    const pct = (timeLeft / totalTime) * 100;
-    fillEl.style.width = `${Math.max(0, pct)}%`;
-  }
-
-  restTimerInterval = setInterval(() => {
-    timeLeft--;
-    updatePopup();
-
-    if (timeLeft <= 3 && timeLeft > 0) playBeep();
-
-    if (timeLeft <= 0) {
-      playTripleBeep();
+  // Subscribe to global timer for updates
+  restTimerUnsubscribe = globalTimer.subscribe((state) => {
+    if (!state.isActive || state.mode !== 'rest') {
       dismissRestTimer();
-      showToast('Rest complete!');
+      return;
     }
-  }, 1000);
+    if (timeEl) timeEl.textContent = formatTime(Math.max(0, state.timeLeft));
+    if (fillEl) fillEl.style.width = `${Math.max(0, state.progress * 100)}%`;
+  });
 
   popup.querySelector('#rest-dismiss')?.addEventListener('click', dismissRestTimer);
   popup.querySelector('#rest-skip')?.addEventListener('click', () => {
+    globalTimer.stop();
     dismissRestTimer();
     showToast('Rest skipped');
   });
   popup.querySelectorAll('[data-add]').forEach(btn => {
     btn.addEventListener('click', () => {
-      timeLeft = Math.max(1, timeLeft + parseInt(btn.dataset.add, 10));
-      updatePopup();
+      globalTimer.addTime(parseInt(btn.dataset.add, 10));
     });
   });
 }
 
 function dismissRestTimer() {
+  if (restTimerUnsubscribe) {
+    restTimerUnsubscribe();
+    restTimerUnsubscribe = null;
+  }
   clearInterval(restTimerInterval);
   restTimerInterval = null;
   const popup = document.getElementById('rest-timer-popup');

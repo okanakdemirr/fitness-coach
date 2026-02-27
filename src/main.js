@@ -36,6 +36,12 @@ startRouter();
 // Signal to the self-healing script that JS loaded and rendered successfully
 window.__FITCOACH_LOADED = true;
 
+// Clean up cache-bust query param from self-healing recovery if present
+if (window.location.search.includes('_fc=')) {
+  const cleanUrl = window.location.pathname + window.location.hash;
+  window.history.replaceState(null, '', cleanUrl);
+}
+
 // Initialize the global floating timer widget
 try {
   initFloatingTimer();
@@ -142,22 +148,12 @@ function showIOSInstallBanner() {
   });
 }
 
-// Register service worker and handle updates
+// Check for service worker updates periodically
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.ready.then((registration) => {
-      console.log('FitCoach PWA is ready for offline use');
-
-      // Check for updates periodically
-      setInterval(() => registration.update(), 60000);
-    });
-
-    // Auto-reload when a new service worker takes over
-    let refreshing = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
-      window.location.reload();
-    });
+  navigator.serviceWorker.ready.then((registration) => {
+    console.log('FitCoach PWA is ready for offline use');
+    setInterval(() => registration.update(), 60000);
   });
+  // Note: controllerchange auto-reload is handled by the inline script in
+  // index.html so it works even when this module fails to load.
 }

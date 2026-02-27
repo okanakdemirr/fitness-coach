@@ -108,35 +108,71 @@
   </noscript>
   <script type="module" src="/src/main.js"></script>
   <script>
-    // Self-healing: if JS module fails to load (e.g. stale SW cache serving
-    // old asset hashes), show a recovery UI. main.js sets __FITCOACH_LOADED
-    // after the router renders, so we only intervene when JS genuinely failed.
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        // App JS signals success by setting this flag
-        if (window.__FITCOACH_LOADED) return;
-        var content = document.getElementById('page-content');
-        if (!content || content.children.length > 0) return;
-        // JS module never executed — show recovery UI (no auto-reload loop)
-        content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#b8b8cc">' +
-          '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff6b6b">App failed to load</p>' +
-          '<p style="font-size:14px;margin-bottom:20px">This usually fixes itself. Tap below to clear cache and reload.</p>' +
-          '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px">Clear Cache &amp; Reload</button></div>';
-        document.getElementById('fc-recovery-btn').addEventListener('click', function() {
-          var p = Promise.resolve();
-          if ('caches' in window) {
-            p = caches.keys().then(function(n) { return Promise.all(n.map(function(k) { return caches.delete(k); })); });
-          }
-          p.then(function() {
-            if ('serviceWorker' in navigator) {
-              return navigator.serviceWorker.getRegistrations().then(function(r) {
-                return Promise.all(r.map(function(reg) { return reg.unregister(); }));
-              });
-            }
-          }).then(function() { location.reload(); });
+    // Self-healing: handles stale service worker cache serving old asset hashes.
+    // main.js sets __FITCOACH_LOADED after the router renders, so we only
+    // intervene when the JS module genuinely failed to load.
+    (function() {
+      // When a new SW takes control (skipWaiting + clientsClaim), auto-reload
+      // so the page gets fresh assets. This works even if main.js failed to load.
+      if ('serviceWorker' in navigator) {
+        var refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          if (refreshing) return;
+          refreshing = true;
+          location.reload();
         });
-      }, 8000);
-    });
+      }
+
+      function clearCachesAndReload() {
+        var p = Promise.resolve();
+        if ('caches' in window) {
+          p = caches.keys().then(function(names) {
+            return Promise.all(names.map(function(k) { return caches.delete(k); }));
+          });
+        }
+        return p.then(function() {
+          if ('serviceWorker' in navigator) {
+            return navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            });
+          }
+        }).then(function() {
+          // Cache-bust the reload so the browser HTTP cache is bypassed
+          var url = location.href.split('?')[0] + '?_fc=' + Date.now();
+          location.replace(url);
+        });
+      }
+
+      window.addEventListener('load', function() {
+        // Shorter timeout — 3 seconds is plenty for module loading
+        setTimeout(function() {
+          if (window.__FITCOACH_LOADED) return;
+          var content = document.getElementById('page-content');
+          if (!content || content.children.length > 0) return;
+
+          // Check if we already tried auto-recovery on this page load
+          var params = new URLSearchParams(location.search);
+          if (params.has('_fc')) {
+            // Auto-recovery already attempted — show manual recovery UI
+            content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#b8b8cc">' +
+              '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff6b6b">App failed to load</p>' +
+              '<p style="font-size:14px;margin-bottom:20px">Tap below to clear cache and try again.</p>' +
+              '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;position:relative;z-index:10">Clear Cache &amp; Reload</button></div>';
+            document.getElementById('fc-recovery-btn').addEventListener('click', function() {
+              clearCachesAndReload();
+            });
+            // Also respond to touchend for better mobile reliability
+            document.getElementById('fc-recovery-btn').addEventListener('touchend', function(e) {
+              e.preventDefault();
+              clearCachesAndReload();
+            });
+          } else {
+            // First failure — auto-clear caches and reload silently
+            clearCachesAndReload();
+          }
+        }, 3000);
+      });
+    })();
   </script>
 </body>
 </html>

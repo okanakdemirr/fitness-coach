@@ -23,29 +23,31 @@ export function initFloatingTimer() {
   });
 
   // Subscribe to global timer updates
-  unsubscribe = globalTimer.subscribe(render);
+  unsubscribe = globalTimer.subscribe(renderFromState);
 
-  // Also listen for route changes to show/hide on timer page
+  // Re-render on route changes so the widget shows/hides correctly
+  // when navigating to/from the timer page
   window.addEventListener('hashchange', () => {
-    if (globalTimer.isActive) {
-      // Trigger a re-render to check route
-      render({
-        timeLeft: globalTimer.timeLeft,
-        totalTime: globalTimer.totalTime,
-        isRunning: globalTimer.isRunning,
-        isPaused: globalTimer.isPaused,
-        isActive: globalTimer.isActive,
-        mode: globalTimer.mode,
-        label: globalTimer.label,
-        progress: globalTimer.progress,
-        intervalState: globalTimer.intervalState,
-        intervalConfig: globalTimer.intervalConfig
-      });
-    }
+    renderFromState(buildSnapshot());
   });
 }
 
-function render(state) {
+function buildSnapshot() {
+  return {
+    timeLeft: globalTimer.timeLeft,
+    totalTime: globalTimer.totalTime,
+    isRunning: globalTimer.isRunning,
+    isPaused: globalTimer.isPaused,
+    isActive: globalTimer.isActive,
+    mode: globalTimer.mode,
+    label: globalTimer.label,
+    progress: globalTimer.progress,
+    intervalState: globalTimer.intervalState,
+    intervalConfig: globalTimer.intervalConfig
+  };
+}
+
+function renderFromState(state) {
   if (!widgetEl) return;
 
   // Hide widget if timer is not active
@@ -54,8 +56,15 @@ function render(state) {
     return;
   }
 
-  // Hide on the timer page itself (the full timer UI is shown there)
+  // Hide on the timer page (the full timer UI is shown there)
   if (getCurrentPath() === '/timer') {
+    widgetEl.classList.add('hidden');
+    return;
+  }
+
+  // Hide if the workout rest timer popup is already visible
+  // (avoid showing two timer UIs at once)
+  if (document.getElementById('rest-timer-popup')) {
     widgetEl.classList.add('hidden');
     return;
   }

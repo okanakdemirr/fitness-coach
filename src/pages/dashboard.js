@@ -42,7 +42,7 @@ export function dashboardPage(container) {
       <div class="card card-clickable mb-24" id="resume-workout" style="border-color: var(--accent)">
         <div class="flex items-center justify-between mb-8">
           <span class="workout-timer-badge"><span class="dot"></span> Active Workout</span>
-          <span class="text-sm text-muted">${activeWorkout.exercises.length} exercises</span>
+          <span class="text-sm text-muted">${(activeWorkout.exercises || []).length} exercises</span>
         </div>
         <p class="text-sm text-muted">Tap to resume your workout</p>
       </div>
@@ -112,13 +112,13 @@ export function dashboardPage(container) {
       <p class="section-title">Today's Workout</p>
       <div class="card mb-16">
         <div class="flex items-center justify-between mb-8">
-          <span class="font-bold">${todayWorkout.exercises.length} Exercises</span>
+          <span class="font-bold">${(todayWorkout.exercises || []).length} Exercises</span>
           <span class="text-sm text-muted">${formatDuration(todayWorkout.startTime, todayWorkout.endTime)}</span>
         </div>
-        ${todayWorkout.exercises.map(ex => `
+        ${(todayWorkout.exercises || []).map(ex => `
           <div class="text-sm mb-8">
             <span class="font-bold">${escapeHtml(ex.name)}</span>
-            <span class="text-muted"> — ${ex.sets.filter(s => s.completed).length} sets</span>
+            <span class="text-muted"> — ${(ex.sets || []).filter(s => s.completed).length} sets</span>
           </div>
         `).join('')}
       </div>
@@ -154,8 +154,8 @@ function getTotalVolume(workouts, unit) {
   workouts
     .filter(w => w.date >= weekStartStr)
     .forEach(w => {
-      w.exercises.forEach(ex => {
-        ex.sets.forEach(s => {
+      (w.exercises || []).forEach(ex => {
+        (ex.sets || []).forEach(s => {
           if (s.completed && s.weight && s.reps) {
             volume += s.weight * s.reps;
           }
@@ -208,7 +208,7 @@ function getRecentWorkouts(workouts) {
           <span class="workout-summary-time">${formatDuration(w.startTime, w.endTime)}</span>
         </div>
         <div class="workout-summary-exercises">
-          ${w.exercises.map(ex => `<span class="workout-summary-exercise">${escapeHtml(ex.name)}</span>`).join('')}
+          ${(w.exercises || []).map(ex => `<span class="workout-summary-exercise">${escapeHtml(ex.name)}</span>`).join('')}
         </div>
       </div>
     `).join('')}

@@ -40,7 +40,7 @@ export function statsPage(container) {
   // Weekly volume
   let weeklyVolume = 0;
   thisWeek.forEach(w => {
-    w.exercises.forEach(ex => {
+    (w.exercises || []).forEach(ex => {
       ex.sets.forEach(s => {
         if (s.completed && s.weight && s.reps) {
           weeklyVolume += s.weight * s.reps;
@@ -57,7 +57,7 @@ export function statsPage(container) {
     const dateStr = d.toISOString().split('T')[0];
     const dayWorkouts = workouts.filter(w => w.date === dateStr);
     const sets = dayWorkouts.reduce((a, w) =>
-      a + w.exercises.reduce((b, e) => b + e.sets.filter(s => s.completed).length, 0), 0);
+      a + (w.exercises || []).reduce((b, e) => b + e.sets.filter(s => s.completed).length, 0), 0);
     return { day, sets, hasWorkout: dayWorkouts.length > 0 };
   });
   const maxSets = Math.max(...weekData.map(d => d.sets), 1);
@@ -65,7 +65,7 @@ export function statsPage(container) {
   // Most trained muscle groups
   const categoryCount = {};
   workouts.forEach(w => {
-    w.exercises.forEach(ex => {
+    (w.exercises || []).forEach(ex => {
       categoryCount[ex.category] = (categoryCount[ex.category] || 0) + 1;
     });
   });
@@ -76,7 +76,7 @@ export function statsPage(container) {
   // Personal records (highest weight per exercise)
   const records = {};
   workouts.forEach(w => {
-    w.exercises.forEach(ex => {
+    (w.exercises || []).forEach(ex => {
       ex.sets.forEach(s => {
         if (s.completed && s.weight) {
           if (!records[ex.name] || s.weight > records[ex.name]) {

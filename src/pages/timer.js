@@ -106,6 +106,9 @@ function renderRest(el) {
   const settings = store.getSettings();
   const defaultRest = settings.defaultRestTime || 90;
 
+  // Fixed presets in ascending order; highlight the one matching user's default
+  const restPresets = [30, 60, 90, 120, 180, 300];
+
   el.innerHTML = `
     <div class="timer-container">
       ${renderTimerCircle('REST')}
@@ -113,12 +116,9 @@ function renderRest(el) {
       <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
         <p class="section-title text-center">Quick Rest</p>
         <div class="timer-presets">
-          <button class="chip" data-seconds="30">0:30</button>
-          <button class="chip active" data-seconds="${defaultRest}">${formatTime(defaultRest)}</button>
-          <button class="chip" data-seconds="60">1:00</button>
-          <button class="chip" data-seconds="90">1:30</button>
-          <button class="chip" data-seconds="120">2:00</button>
-          <button class="chip" data-seconds="180">3:00</button>
+          ${restPresets.map(sec => `
+            <button class="chip ${sec === defaultRest ? 'active' : ''}" data-seconds="${sec}">${formatTime(sec)}</button>
+          `).join('')}
         </div>
       </div>
     </div>

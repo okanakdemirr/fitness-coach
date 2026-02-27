@@ -458,3 +458,194 @@ select.input {
 .text-sm { font-size: 13px; }
 .font-bold { font-weight: 700; }
 .w-full { width: 100%; }
+
+/* ===== MUSCLE MAP ===== */
+.muscle-map-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.muscle-map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.muscle-map-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.muscle-map-tabs {
+  display: flex;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  margin-bottom: 16px;
+}
+
+.muscle-tab {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.muscle-tab.active {
+  background: var(--bg-secondary);
+  color: var(--accent);
+  box-shadow: var(--shadow);
+}
+
+.muscle-map-body {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.muscle-map-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  max-width: 170px;
+}
+
+.muscle-map-svg {
+  width: 100%;
+  aspect-ratio: 160 / 410;
+}
+
+.muscle-map-svg svg {
+  width: 100%;
+  height: 100%;
+}
+
+.muscle-map-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* Body outline (head, hands, feet) */
+.body-outline {
+  fill: var(--bg-tertiary);
+  stroke: none;
+}
+
+/* Muscle zone default */
+[data-zone] {
+  fill: var(--bg-tertiary);
+  stroke: rgba(255,255,255,0.04);
+  stroke-width: 0.5;
+  cursor: pointer;
+  transition: fill 0.4s ease, opacity 0.4s ease, filter 0.4s ease;
+}
+
+[data-zone]:hover {
+  opacity: 0.85;
+}
+
+/* Intensity levels */
+[data-zone][data-level="0"] { fill: var(--bg-tertiary); }
+[data-zone][data-level="1"] { fill: rgba(0, 212, 170, 0.2); }
+[data-zone][data-level="2"] { fill: rgba(0, 212, 170, 0.4); }
+[data-zone][data-level="3"] { fill: rgba(0, 212, 170, 0.65); }
+[data-zone][data-level="4"] { fill: rgba(0, 212, 170, 0.9); }
+
+[data-theme="light"] [data-zone][data-level="1"] { fill: rgba(0, 184, 148, 0.2); }
+[data-theme="light"] [data-zone][data-level="2"] { fill: rgba(0, 184, 148, 0.35); }
+[data-theme="light"] [data-zone][data-level="3"] { fill: rgba(0, 184, 148, 0.55); }
+[data-theme="light"] [data-zone][data-level="4"] { fill: rgba(0, 184, 148, 0.8); }
+
+/* Selected zone highlight */
+[data-zone].selected {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+/* Legend */
+.muscle-map-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.legend-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.legend-swatch {
+  width: 16px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-swatch[data-lvl="0"] { background: var(--bg-tertiary); }
+.legend-swatch[data-lvl="1"] { background: rgba(0, 212, 170, 0.2); }
+.legend-swatch[data-lvl="2"] { background: rgba(0, 212, 170, 0.4); }
+.legend-swatch[data-lvl="3"] { background: rgba(0, 212, 170, 0.65); }
+.legend-swatch[data-lvl="4"] { background: rgba(0, 212, 170, 0.9); }
+
+/* Detail panel (appears on zone tap) */
+.muscle-map-detail {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, margin 0.3s ease;
+}
+
+.muscle-map-detail.visible {
+  max-height: 80px;
+  margin-top: 12px;
+}
+
+.muscle-detail-content {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.muscle-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.muscle-detail-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.muscle-detail-sets {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.muscle-detail-exercises {
+  font-size: 12px;
+  color: var(--text-muted);
+}

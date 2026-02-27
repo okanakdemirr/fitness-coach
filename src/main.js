@@ -33,6 +33,9 @@ route('/settings', settingsPage);
 // Start the router
 startRouter();
 
+// Signal to the self-healing script that JS loaded and rendered successfully
+window.__FITCOACH_LOADED = true;
+
 // Initialize the global floating timer widget
 try {
   initFloatingTimer();

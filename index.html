@@ -108,57 +108,34 @@
   </noscript>
   <script type="module" src="/src/main.js"></script>
   <script>
-    // Self-healing: if JS fails to render the app (e.g. stale SW cache),
-    // clear all caches, unregister SW, and reload.
-    // Retries up to 3 times with increasing delays.
+    // Self-healing: if JS module fails to load (e.g. stale SW cache serving
+    // old asset hashes), show a recovery UI. main.js sets __FITCOACH_LOADED
+    // after the router renders, so we only intervene when JS genuinely failed.
     window.addEventListener('load', function() {
       setTimeout(function() {
+        // App JS signals success by setting this flag
+        if (window.__FITCOACH_LOADED) return;
         var content = document.getElementById('page-content');
-        if (content && content.children.length === 0) {
-          var attempts = parseInt(sessionStorage.getItem('fitcoach-recovery') || '0', 10);
-          if (attempts >= 3) {
-            // After 3 failed attempts, show manual recovery UI
-            content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#b8b8cc">' +
-              '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff6b6b">App failed to load</p>' +
-              '<p style="font-size:14px;margin-bottom:20px">Please clear your browser cache or reinstall the app.</p>' +
-              '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px">Clear Cache &amp; Reload</button></div>';
-            document.getElementById('fc-recovery-btn').addEventListener('click', function() {
-              sessionStorage.removeItem('fitcoach-recovery');
-              var p = Promise.resolve();
-              if ('caches' in window) {
-                p = caches.keys().then(function(n) { return Promise.all(n.map(function(k) { return caches.delete(k); })); });
-              }
-              p.then(function() {
-                if ('serviceWorker' in navigator) {
-                  return navigator.serviceWorker.getRegistrations().then(function(r) {
-                    return Promise.all(r.map(function(reg) { return reg.unregister(); }));
-                  });
-                }
-              }).then(function() { location.reload(); });
-            });
-            return;
+        if (!content || content.children.length > 0) return;
+        // JS module never executed — show recovery UI (no auto-reload loop)
+        content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#b8b8cc">' +
+          '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff6b6b">App failed to load</p>' +
+          '<p style="font-size:14px;margin-bottom:20px">This usually fixes itself. Tap below to clear cache and reload.</p>' +
+          '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px">Clear Cache &amp; Reload</button></div>';
+        document.getElementById('fc-recovery-btn').addEventListener('click', function() {
+          var p = Promise.resolve();
+          if ('caches' in window) {
+            p = caches.keys().then(function(n) { return Promise.all(n.map(function(k) { return caches.delete(k); })); });
           }
-          sessionStorage.setItem('fitcoach-recovery', String(attempts + 1));
-          var clearAndReload = function() {
-            if ('caches' in window) {
-              caches.keys().then(function(names) {
-                return Promise.all(names.map(function(n) { return caches.delete(n); }));
-              }).then(function() {
-                if ('serviceWorker' in navigator) {
-                  return navigator.serviceWorker.getRegistrations().then(function(regs) {
-                    return Promise.all(regs.map(function(r) { return r.unregister(); }));
-                  });
-                }
-              }).then(function() { window.location.reload(); });
-            } else {
-              window.location.reload();
+          p.then(function() {
+            if ('serviceWorker' in navigator) {
+              return navigator.serviceWorker.getRegistrations().then(function(r) {
+                return Promise.all(r.map(function(reg) { return reg.unregister(); }));
+              });
             }
-          };
-          clearAndReload();
-        } else if (content && content.children.length > 0) {
-          sessionStorage.removeItem('fitcoach-recovery');
-        }
-      }, 2000);
+          }).then(function() { location.reload(); });
+        });
+      }, 8000);
     });
   </script>
 </body>

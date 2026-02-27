@@ -342,11 +342,20 @@ function bindControls(el, getInitialValue, isInterval = false, mode = 'countdown
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
-    // Reset display
+    // Fully reset display
     const timeEl = el.querySelector('#timer-time');
-    if (timeEl) timeEl.textContent = '00:00';
+    if (timeEl) {
+      timeEl.textContent = '00:00';
+      timeEl.classList.remove('timer-time-urgent');
+    }
     const progressEl = el.querySelector('#timer-progress');
-    if (progressEl) progressEl.style.strokeDashoffset = '0';
+    if (progressEl) {
+      progressEl.style.strokeDashoffset = '0';
+      progressEl.classList.remove('warning', 'danger');
+      progressEl.style.stroke = '';
+    }
+    const labelEl = el.querySelector('#timer-label');
+    if (labelEl) labelEl.textContent = '';
   });
 }
 

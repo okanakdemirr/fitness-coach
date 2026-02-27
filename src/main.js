@@ -136,20 +136,12 @@ if ('serviceWorker' in navigator) {
       setInterval(() => registration.update(), 60000);
     });
 
-    // Notify user when a new version activates
+    // Auto-reload when a new service worker takes over
     let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
       refreshing = true;
-      // Show a simple toast via DOM since import may not be available
-      const container = document.getElementById('toast-container');
-      if (container) {
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = 'App updated! Refresh for latest version.';
-        container.appendChild(toast);
-        setTimeout(() => toast.remove(), 5000);
-      }
+      window.location.reload();
     });
   });
 }

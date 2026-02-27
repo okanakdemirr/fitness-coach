@@ -28,7 +28,8 @@
     .nav-item.active,.nav-item[aria-current="page"]{color:var(--accent)}
     .nav-icon{width:24px;height:24px}
     .hidden{display:none!important}
-    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:flex-end;justify-content:center}
+    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none}
+    #modal-overlay.visible{opacity:1;pointer-events:auto}
     #modal-overlay.hidden{display:none}
     .page-title{font-size:24px;font-weight:800;margin-bottom:20px;letter-spacing:-.5px}
     .section-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
@@ -99,6 +100,44 @@
   </div>
   <div id="modal-overlay" class="hidden" aria-hidden="true"></div>
   <div id="toast-container" role="status" aria-live="polite"></div>
+  <noscript>
+    <div style="text-align:center;padding:40px 20px;color:#b8b8cc">
+      <p style="font-size:18px;font-weight:700;margin-bottom:8px">JavaScript Required</p>
+      <p style="font-size:14px">Please enable JavaScript to use FitCoach.</p>
+    </div>
+  </noscript>
   <script type="module" src="/src/main.js"></script>
+  <script>
+    // Self-healing: if JS fails to render the app (e.g. stale SW cache),
+    // clear all caches, unregister SW, and reload once.
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        var content = document.getElementById('page-content');
+        if (content && content.children.length === 0) {
+          if (sessionStorage.getItem('fitcoach-recovery')) return;
+          sessionStorage.setItem('fitcoach-recovery', '1');
+          if ('caches' in window) {
+            caches.keys().then(function(names) {
+              return Promise.all(names.map(function(n) { return caches.delete(n); }));
+            }).then(function() {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                  Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+                    window.location.reload();
+                  });
+                });
+              } else {
+                window.location.reload();
+              }
+            });
+          } else {
+            window.location.reload();
+          }
+        } else if (content && content.children.length > 0) {
+          sessionStorage.removeItem('fitcoach-recovery');
+        }
+      }, 3000);
+    });
+  </script>
 </body>
 </html>

@@ -930,12 +930,13 @@
 
 .rest-timer-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
 }
 
 .rest-timer-btn {
-  padding: 6px 16px;
+  padding: 6px 12px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -948,6 +949,12 @@
 
 .rest-timer-btn:hover {
   background: var(--bg-hover);
+}
+
+.rest-timer-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .rest-timer-btn.rest-skip {

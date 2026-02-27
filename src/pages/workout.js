@@ -477,6 +477,8 @@ function showRestTimerPopup(seconds) {
   // Use the global timer for rest
   globalTimer.startRest(seconds);
 
+  const restPresets = [30, 60, 90, 120, 180];
+
   // Create floating rest timer popup
   const popup = document.createElement('div');
   popup.id = 'rest-timer-popup';
@@ -491,8 +493,9 @@ function showRestTimerPopup(seconds) {
       <div class="rest-timer-fill" id="rest-fill" style="width:100%"></div>
     </div>
     <div class="rest-timer-actions">
-      <button class="rest-timer-btn" data-add="-15">-15s</button>
-      <button class="rest-timer-btn" data-add="15">+15s</button>
+      ${restPresets.map(sec => `
+        <button class="rest-timer-btn ${sec === seconds ? 'active' : ''}" data-rest="${sec}">${formatTime(sec)}</button>
+      `).join('')}
       <button class="rest-timer-btn rest-skip" id="rest-skip">Skip</button>
     </div>
   `;
@@ -520,9 +523,13 @@ function showRestTimerPopup(seconds) {
     dismissRestTimer();
     showToast('Rest skipped');
   });
-  popup.querySelectorAll('[data-add]').forEach(btn => {
+  // Quick rest presets — restart rest timer at the selected duration
+  popup.querySelectorAll('[data-rest]').forEach(btn => {
     btn.addEventListener('click', () => {
-      globalTimer.addTime(parseInt(btn.dataset.add, 10));
+      const newDuration = parseInt(btn.dataset.rest, 10);
+      popup.querySelectorAll('[data-rest]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      globalTimer.startRest(newDuration);
     });
   });
 }

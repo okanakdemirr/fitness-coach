@@ -196,7 +196,7 @@ function renderExercises(container, settings) {
       <div class="exercise-block-header">
         <div>
           <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
-          <div class="exercise-block-category">${ex.category}</div>
+          <div class="exercise-block-category editable-category" data-ex="${exIdx}" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">${ex.category} <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
         </div>
         <button class="btn btn-sm btn-ghost remove-exercise" data-idx="${exIdx}">Remove</button>
       </div>
@@ -297,6 +297,13 @@ function renderExercises(container, settings) {
     });
   });
 
+  list.querySelectorAll('.editable-category').forEach(el => {
+    el.addEventListener('click', () => {
+      const exIdx = parseInt(el.dataset.ex, 10);
+      showCategoryPicker(exIdx, container, settings);
+    });
+  });
+
   list.querySelectorAll('.remove-set').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIdx = parseInt(btn.dataset.ex, 10);
@@ -313,10 +320,72 @@ function renderExercises(container, settings) {
   });
 }
 
+function showCategoryPicker(exIdx, container, settings) {
+  const currentCat = activeWorkout.exercises[exIdx].category;
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-header">
+      <h3 class="modal-title">Change Target Group</h3>
+      <button class="modal-close" id="catpick-close">&times;</button>
+    </div>
+    <div class="chip-group mb-16">
+      ${categories.filter(c => c.id !== 'all').map(c => `
+        <button class="chip ${c.id === currentCat ? 'active' : ''}" data-pick-cat="${c.id}">${c.name}</button>
+      `).join('')}
+    </div>
+  `;
+
+  const close = showModal(el);
+
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('#catpick-close')) { close(); return; }
+    const chip = e.target.closest('[data-pick-cat]');
+    if (chip) {
+      activeWorkout.exercises[exIdx].category = chip.dataset.pickCat;
+      store.setActiveWorkout(activeWorkout);
+      renderExercises(container, settings);
+      close();
+      showToast(`Target group changed to ${chip.dataset.pickCat}`);
+    }
+  });
+}
+
 function showExercisePicker(container, settings) {
   const el = document.createElement('div');
   let filterCategory = 'all';
   let searchQuery = '';
+  let customName = '';
+  let customCategory = '';
+
+  function updateCustomAddButton() {
+    const btn = el.querySelector('#custom-add');
+    if (btn) btn.disabled = !(customName.trim() && customCategory);
+  }
+
+  function renderCustomForm() {
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Create Custom Exercise</h3>
+        <button class="modal-close" id="picker-close">&times;</button>
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Exercise Name</label>
+        <input type="text" class="input" id="custom-name" placeholder="Exercise name" maxlength="100">
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Target Group</label>
+        <div class="chip-group">
+          ${categories.filter(c => c.id !== 'all').map(c => `
+            <button class="chip ${c.id === customCategory ? 'active' : ''}" data-custom-cat="${c.id}">${c.name}</button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-primary btn-block" id="custom-add" disabled>Add Exercise</button>
+        <button class="btn btn-secondary btn-block" id="custom-back">Back</button>
+      </div>
+    `;
+  }
 
   function render() {
     const filtered = exerciseDB.filter(ex => {
@@ -382,16 +451,45 @@ function showExercisePicker(container, settings) {
       return;
     }
 
+    // Custom form: category chip selection
+    const customChip = e.target.closest('[data-custom-cat]');
+    if (customChip) {
+      customCategory = customChip.dataset.customCat;
+      el.querySelectorAll('[data-custom-cat]').forEach(c => c.classList.remove('active'));
+      customChip.classList.add('active');
+      updateCustomAddButton();
+      return;
+    }
+
+    // Custom form: Add button
+    if (e.target.closest('#custom-add')) {
+      const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
+      if (name && customCategory) {
+        addExerciseToWorkout(name, customCategory, container, settings);
+        close();
+      }
+      return;
+    }
+
+    // Custom form: Back button
+    if (e.target.closest('#custom-back')) {
+      customName = '';
+      customCategory = '';
+      render();
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+      return;
+    }
+
     // Exercise selection
     const item = e.target.closest('.exercise-pick');
     if (item) {
       if (item.dataset.name === 'custom') {
-        const name = prompt('Exercise name:');
-        if (name?.trim()) {
-          const cleaned = name.trim().slice(0, 100);
-          addExerciseToWorkout(cleaned, 'custom', container, settings);
-          close();
-        }
+        customName = '';
+        customCategory = '';
+        renderCustomForm();
+        setTimeout(() => el.querySelector('#custom-name')?.focus(), 50);
+        return;
       } else {
         addExerciseToWorkout(item.dataset.name, item.dataset.cat, container, settings);
         close();
@@ -406,6 +504,10 @@ function showExercisePicker(container, settings) {
       // Keep focus and cursor position in search
       const search = el.querySelector('#exercise-search');
       if (search) { search.value = searchQuery; search.focus(); }
+    }
+    if (e.target.id === 'custom-name') {
+      customName = e.target.value;
+      updateCustomAddButton();
     }
   });
 }

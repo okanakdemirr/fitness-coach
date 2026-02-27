@@ -8,8 +8,6 @@ let currentMode = 'countdown';
 let unsubscribe = null;
 
 export function timerPage(container) {
-  const settings = store.getSettings();
-
   // If a timer is already active, sync the tab to the active mode
   if (globalTimer.isActive) {
     currentMode = globalTimer.mode;

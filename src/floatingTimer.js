@@ -16,6 +16,12 @@ export function initFloatingTimer() {
   widgetEl.setAttribute('aria-label', 'Active timer');
   document.body.appendChild(widgetEl);
 
+  // Bind click-to-navigate once on the container (delegates through)
+  widgetEl.addEventListener('click', (e) => {
+    if (e.target.closest('.floating-timer-btn')) return;
+    window.location.hash = '#/timer';
+  });
+
   // Subscribe to global timer updates
   unsubscribe = globalTimer.subscribe(render);
 
@@ -57,8 +63,8 @@ function render(state) {
   widgetEl.classList.remove('hidden');
 
   const progress = state.progress;
-  const circumference = globalTimer.circumference;
-  const offset = circumference * (1 - progress);
+  const ringR = 20;
+  const ringCirc = 2 * Math.PI * ringR;
 
   // Determine colors
   let progressClass = '';
@@ -79,9 +85,9 @@ function render(state) {
   widgetEl.innerHTML = `
     <div class="floating-timer-ring">
       <svg viewBox="0 0 48 48">
-        <circle class="floating-timer-bg" cx="24" cy="24" r="20"/>
-        <circle class="floating-timer-progress ${progressClass}" cx="24" cy="24" r="20"
-          stroke-dasharray="${2 * Math.PI * 20}" stroke-dashoffset="${(2 * Math.PI * 20) * (1 - progress)}"/>
+        <circle class="floating-timer-bg" cx="24" cy="24" r="${ringR}"/>
+        <circle class="floating-timer-progress ${progressClass}" cx="24" cy="24" r="${ringR}"
+          stroke-dasharray="${ringCirc}" stroke-dashoffset="${ringCirc * (1 - progress)}"/>
       </svg>
       <div class="floating-timer-icon">
         ${state.isPaused ? `
@@ -109,21 +115,15 @@ function render(state) {
     </div>
   `;
 
-  // Bind actions
+  // Bind action buttons (these are inside innerHTML so must rebind each render)
   widgetEl.querySelector('#ft-toggle')?.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (state.isRunning) globalTimer.pause();
+    if (globalTimer.isRunning) globalTimer.pause();
     else globalTimer.resume();
   });
 
   widgetEl.querySelector('#ft-stop')?.addEventListener('click', (e) => {
     e.stopPropagation();
     globalTimer.stop();
-  });
-
-  // Clicking the widget navigates to timer page
-  widgetEl.addEventListener('click', (e) => {
-    if (e.target.closest('.floating-timer-btn')) return;
-    window.location.hash = '#/timer';
   });
 }

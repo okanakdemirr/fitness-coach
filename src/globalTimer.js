@@ -20,121 +20,72 @@ let intervalState = { round: 0, phase: 'prepare', totalRounds: 8 };
 // Listeners: any part of the app can subscribe to timer ticks
 const listeners = new Set();
 
-const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 115;
+// ===== SHARED AUDIO HELPERS =====
+let audioCtx = null;
 
-// ===== SOUND HELPERS =====
-function playCountdownTick() {
+function getAudioContext() {
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Resume if suspended (browsers suspend until user gesture)
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function isSoundEnabled() {
   try {
     const raw = localStorage.getItem('fitcoach_settings');
     if (raw) {
       const s = JSON.parse(raw);
-      if (s.soundEnabled === false) return;
+      if (s.soundEnabled === false) return false;
     }
   } catch { /* ignore */ }
+  return true;
+}
 
+function playTone(frequency, duration, volume = 0.25, type = 'sine', startDelay = 0) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.value = 660;
-    osc.type = 'sine';
-    gain.gain.value = 0.15;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc.stop(ctx.currentTime + 0.15);
+    osc.frequency.value = frequency;
+    osc.type = type;
+    const startAt = ctx.currentTime + startDelay;
+    gain.gain.setValueAtTime(0, startAt);
+    gain.gain.linearRampToValueAtTime(volume, startAt + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+    osc.start(startAt);
+    osc.stop(startAt + duration);
   } catch { /* Audio not available */ }
+}
+
+function playCountdownTick() {
+  if (!isSoundEnabled()) return;
+  playTone(660, 0.15, 0.15);
 }
 
 function playWarningBeep() {
-  try {
-    const raw = localStorage.getItem('fitcoach_settings');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.soundEnabled === false) return;
-    }
-  } catch { /* ignore */ }
-
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 1200;
-    osc.type = 'triangle';
-    gain.gain.value = 0.25;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-    osc.stop(ctx.currentTime + 0.3);
-  } catch { /* Audio not available */ }
+  if (!isSoundEnabled()) return;
+  playTone(1200, 0.3, 0.25, 'triangle');
 }
 
 function playStartSound() {
-  try {
-    const raw = localStorage.getItem('fitcoach_settings');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.soundEnabled === false) return;
-    }
-  } catch { /* ignore */ }
-
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Rising two-tone "go" sound
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.frequency.value = 600;
-    osc1.type = 'sine';
-    gain1.gain.value = 0.25;
-    osc1.start();
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc1.stop(ctx.currentTime + 0.15);
-
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.frequency.value = 900;
-    osc2.type = 'sine';
-    gain2.gain.value = 0.25;
-    osc2.start(ctx.currentTime + 0.15);
-    gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc2.stop(ctx.currentTime + 0.35);
-  } catch { /* Audio not available */ }
+  if (!isSoundEnabled()) return;
+  // Rising two-tone "go" sound
+  playTone(600, 0.15, 0.25);
+  playTone(900, 0.2, 0.25, 'sine', 0.15);
 }
 
 function playFinishSound() {
-  try {
-    const raw = localStorage.getItem('fitcoach_settings');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.soundEnabled === false) return;
-    }
-  } catch { /* ignore */ }
-
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Triumphant ascending three-tone
-    [0, 0.2, 0.4].forEach((delay, i) => {
-      const freq = [700, 880, 1100][i];
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(0, ctx.currentTime + delay);
-      gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + delay + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.4);
-      osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.4);
-    });
-  } catch { /* Audio not available */ }
+  if (!isSoundEnabled()) return;
+  // Triumphant ascending three-tone
+  playTone(700, 0.4, 0.3, 'sine', 0);
+  playTone(880, 0.4, 0.3, 'sine', 0.2);
+  playTone(1100, 0.4, 0.3, 'sine', 0.4);
 }
 
 // ===== PUBLIC API =====
@@ -150,7 +101,6 @@ export const globalTimer = {
   get intervalConfig() { return { ...intervalConfig }; },
   get intervalState() { return { ...intervalState }; },
   get progress() { return totalTime > 0 ? timeLeft / totalTime : 1; },
-  get circumference() { return CIRCLE_CIRCUMFERENCE; },
 
   // Subscribe/unsubscribe to tick updates
   subscribe(fn) {
@@ -170,7 +120,7 @@ export const globalTimer = {
     requestWakeLock();
     playStartSound();
     this._notify();
-    this._startInterval();
+    this._startTick();
   },
 
   // Start a rest timer
@@ -185,7 +135,7 @@ export const globalTimer = {
     requestWakeLock();
     playStartSound();
     this._notify();
-    this._startInterval();
+    this._startTick();
   },
 
   // Start interval timer
@@ -202,7 +152,7 @@ export const globalTimer = {
     requestWakeLock();
     playStartSound();
     this._notify();
-    this._startInterval();
+    this._startTick();
   },
 
   pause() {
@@ -221,7 +171,7 @@ export const globalTimer = {
     isPaused = false;
     requestWakeLock();
     this._notify();
-    this._startInterval();
+    this._startTick();
   },
 
   stop() {
@@ -243,7 +193,7 @@ export const globalTimer = {
     this._notify();
   },
 
-  // Internal: notify all listeners
+  // Internal: notify all listeners with a snapshot of current state
   _notify() {
     const state = {
       timeLeft,
@@ -262,8 +212,8 @@ export const globalTimer = {
     });
   },
 
-  // Internal: start setInterval tick
-  _startInterval() {
+  // Internal: start the 1-second tick loop
+  _startTick() {
     clearInterval(timerInterval);
     timerInterval = setInterval(() => {
       if (!isRunning) return;
@@ -271,21 +221,18 @@ export const globalTimer = {
 
       // Sound cues
       if (timeLeft === 5) {
-        // 5-second warning
         playWarningBeep();
       } else if (timeLeft <= 3 && timeLeft > 0) {
-        // Last 3 seconds countdown beep
         playBeep();
       } else if (timeLeft === 10) {
-        // Subtle tick at 10s
         playCountdownTick();
       }
 
       if (timeLeft <= 0) {
         if (timerMode === 'interval') {
-          this._handleIntervalPhaseEnd();
+          this._advanceIntervalPhase();
         } else {
-          this._complete();
+          this._finish();
         }
       }
 
@@ -293,7 +240,8 @@ export const globalTimer = {
     }, 1000);
   },
 
-  _complete() {
+  // Internal: timer completed (non-interval)
+  _finish() {
     isRunning = false;
     isPaused = false;
     clearInterval(timerInterval);
@@ -302,10 +250,11 @@ export const globalTimer = {
     releaseWakeLock();
     playFinishSound();
     showToast('Timer complete!');
-    this._notify();
+    // _notify is called by the tick loop after this returns
   },
 
-  _handleIntervalPhaseEnd() {
+  // Internal: advance to the next interval phase
+  _advanceIntervalPhase() {
     const { phase, round, totalRounds } = intervalState;
 
     if (phase === 'prepare') {
@@ -326,7 +275,7 @@ export const globalTimer = {
         releaseWakeLock();
         playFinishSound();
         showToast('Workout complete!');
-        this._notify();
+        // _notify is called by the tick loop after this returns
         return;
       }
       intervalState.phase = 'rest';
@@ -342,7 +291,6 @@ export const globalTimer = {
       timerLabel = 'WORK';
       playDoubleBeep();
     }
-
-    this._notify();
+    // _notify is called by the tick loop after this returns
   }
 };

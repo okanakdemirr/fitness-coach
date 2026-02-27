@@ -1,5 +1,6 @@
 import { store } from '../store.js';
 import { formatDate, formatDuration, todayStr, escapeHtml } from '../utils.js';
+import { renderMuscleMap } from '../muscleMap.js';
 
 export function dashboardPage(container) {
   const settings = store.getSettings();
@@ -68,6 +69,8 @@ export function dashboardPage(container) {
         <div class="stat-label">Weekly Vol (${settings.weightUnit})</div>
       </div>
     </div>
+
+    <div id="muscle-map-container"></div>
 
     <p class="section-title">Quick Actions</p>
     <div class="quick-actions">
@@ -141,6 +144,10 @@ export function dashboardPage(container) {
       location.hash = '#/history';
     });
   });
+
+  // Initialize muscle map
+  const muscleMapEl = container.querySelector('#muscle-map-container');
+  if (muscleMapEl) renderMuscleMap(muscleMapEl);
 }
 
 function getGreeting() {

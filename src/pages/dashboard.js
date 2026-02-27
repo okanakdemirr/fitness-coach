@@ -134,6 +134,13 @@ export function dashboardPage(container) {
       window.location.hash = '#/workout';
     });
   }
+
+  // Event listeners for recent workout cards
+  container.querySelectorAll('[data-nav="history"]').forEach(card => {
+    card.addEventListener('click', () => {
+      location.hash = '#/history';
+    });
+  });
 }
 
 function getGreeting() {
@@ -202,7 +209,7 @@ function getRecentWorkouts(workouts) {
   return `
     <p class="section-title">Recent Workouts</p>
     ${recent.map(w => `
-      <div class="workout-summary-card" onclick="location.hash='#/history'">
+      <div class="workout-summary-card" data-nav="history">
         <div class="workout-summary-header">
           <span class="workout-summary-title">${formatDate(w.date)}</span>
           <span class="workout-summary-time">${formatDuration(w.startTime, w.endTime)}</span>

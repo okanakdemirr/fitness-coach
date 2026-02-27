@@ -123,7 +123,7 @@
               '<p style="font-size:14px;margin-bottom:20px">Please clear your browser cache or reinstall the app.</p>' +
               '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px">Clear Cache &amp; Reload</button></div>';
             document.getElementById('fc-recovery-btn').addEventListener('click', function() {
-              sessionStorage.clear();
+              sessionStorage.removeItem('fitcoach-recovery');
               var p = Promise.resolve();
               if ('caches' in window) {
                 p = caches.keys().then(function(n) { return Promise.all(n.map(function(k) { return caches.delete(k); })); });

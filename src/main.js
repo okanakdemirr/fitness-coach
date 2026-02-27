@@ -16,7 +16,8 @@ import { initFloatingTimer } from './floatingTimer.js';
 try {
   const settings = store.getSettings();
   document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
-} catch {
+} catch (err) {
+  console.error('Theme init failed:', err);
   document.documentElement.setAttribute('data-theme', 'dark');
 }
 

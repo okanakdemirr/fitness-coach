@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { formatDate, formatDateFull, formatDuration, showModal, escapeHtml } from '../utils.js';
+import { formatDate, formatDateFull, formatDuration, showModal, showToast, escapeHtml } from '../utils.js';
 
 export function historyPage(container) {
   const workouts = store.getWorkouts();
@@ -87,51 +87,205 @@ function getWorkoutVolume(workout) {
 
 function showWorkoutDetail(workout, unit, container) {
   const el = document.createElement('div');
+  let editing = false;
+  let editData = null;
+  let close = null;
 
-  el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">${formatDateFull(workout.date)}</h3>
-      <button class="modal-close" id="detail-close">&times;</button>
-    </div>
-    <div class="flex items-center gap-16 mb-16">
-      <div class="badge badge-accent">${formatDuration(workout.startTime, workout.endTime)}</div>
-      <span class="text-sm text-muted">${(workout.exercises || []).reduce((a, e) => a + (e.sets || []).filter(s => s.completed).length, 0)} sets</span>
-    </div>
-    ${workout.notes ? `<p class="text-sm text-muted mb-16">"${escapeHtml(workout.notes)}"</p>` : ''}
-    ${(workout.exercises || []).map(ex => `
-      <div class="card mb-8">
-        <div class="font-bold mb-8">${escapeHtml(ex.name)} <span class="text-sm text-muted">${escapeHtml(ex.category)}</span></div>
-        <div class="set-header">
-          <span>Set</span>
-          <span>${unit}</span>
-          <span>Reps</span>
-          <span></span>
-        </div>
-        ${(ex.sets || []).map((set, i) => `
-          <div class="set-row">
-            <span class="set-number">${i + 1}</span>
-            <span class="text-center text-sm">${set.weight || '—'}</span>
-            <span class="text-center text-sm">${set.reps || '—'}</span>
-            <span class="text-center">${set.completed ? '<span style="color:var(--accent)">&#10003;</span>' : '<span style="color:var(--text-muted)">—</span>'}</span>
-          </div>
-        `).join('')}
+  function renderDetail() {
+    if (editing) {
+      renderEditMode();
+    } else {
+      renderViewMode();
+    }
+  }
+
+  function renderViewMode() {
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">${formatDateFull(workout.date)}</h3>
+        <button class="modal-close" id="detail-close">&times;</button>
       </div>
-    `).join('')}
-    <div class="flex gap-8 mt-16">
-      <button class="btn btn-danger btn-sm" id="delete-workout">Delete Workout</button>
-    </div>
-  `;
+      <div class="flex items-center gap-16 mb-16">
+        <div class="badge badge-accent">${formatDuration(workout.startTime, workout.endTime)}</div>
+        <span class="text-sm text-muted">${(workout.exercises || []).reduce((a, e) => a + (e.sets || []).filter(s => s.completed).length, 0)} sets</span>
+      </div>
+      ${workout.notes ? `<p class="text-sm text-muted mb-16">"${escapeHtml(workout.notes)}"</p>` : ''}
+      ${(workout.exercises || []).map(ex => `
+        <div class="card mb-8">
+          <div class="font-bold mb-8">${escapeHtml(ex.name)} <span class="text-sm text-muted">${escapeHtml(ex.category)}</span></div>
+          <div class="set-header">
+            <span>Set</span>
+            <span>${unit}</span>
+            <span>Reps</span>
+            <span></span>
+          </div>
+          ${(ex.sets || []).map((set, i) => `
+            <div class="set-row">
+              <span class="set-number">${i + 1}</span>
+              <span class="text-center text-sm">${set.weight || '—'}</span>
+              <span class="text-center text-sm">${set.reps || '—'}</span>
+              <span class="text-center">${set.completed ? '<span style="color:var(--accent)">&#10003;</span>' : '<span style="color:var(--text-muted)">—</span>'}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+      <div class="flex gap-8 mt-16">
+        <button class="btn btn-primary btn-sm btn-block" id="edit-workout">Edit</button>
+        <button class="btn btn-danger btn-sm" id="delete-workout">Delete</button>
+      </div>
+    `;
 
-  const close = showModal(el);
-
-  setTimeout(() => {
     el.querySelector('#detail-close')?.addEventListener('click', close);
+    el.querySelector('#edit-workout')?.addEventListener('click', () => {
+      editing = true;
+      editData = JSON.parse(JSON.stringify(workout));
+      renderDetail();
+    });
     el.querySelector('#delete-workout')?.addEventListener('click', () => {
       store.deleteWorkout(workout.id);
       close();
       historyPage(container);
     });
-  }, 50);
+  }
+
+  function renderEditMode() {
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Workout</h3>
+        <button class="modal-close" id="edit-cancel">&times;</button>
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Notes</label>
+        <textarea class="input" id="edit-notes" rows="2" placeholder="Workout notes">${escapeHtml(editData.notes || '')}</textarea>
+      </div>
+      ${(editData.exercises || []).map((ex, exIdx) => `
+        <div class="card mb-8">
+          <div class="flex items-center justify-between mb-8">
+            <div class="font-bold">${escapeHtml(ex.name)} <span class="text-sm text-muted">${escapeHtml(ex.category)}</span></div>
+            <button class="btn btn-sm btn-ghost edit-remove-exercise" data-idx="${exIdx}">Remove</button>
+          </div>
+          <div class="set-header">
+            <span>Set</span>
+            <span>${unit}</span>
+            <span>Reps</span>
+            <span></span>
+            <span></span>
+          </div>
+          ${(ex.sets || []).map((set, setIdx) => `
+            <div class="set-row">
+              <span class="set-number">${setIdx + 1}</span>
+              <input type="number" class="input edit-weight" data-ex="${exIdx}" data-set="${setIdx}"
+                value="${set.weight || ''}" placeholder="0" min="0" inputmode="decimal">
+              <input type="number" class="input edit-reps" data-ex="${exIdx}" data-set="${setIdx}"
+                value="${set.reps || ''}" placeholder="0" min="0" inputmode="numeric">
+              <button class="set-check ${set.completed ? 'checked' : ''} edit-completed" data-ex="${exIdx}" data-set="${setIdx}">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </button>
+              <button class="remove-set edit-remove-set" data-ex="${exIdx}" data-set="${setIdx}" title="Remove set">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          `).join('')}
+          <button class="add-set-btn edit-add-set" data-ex="${exIdx}">+ Add Set</button>
+        </div>
+      `).join('')}
+      <div class="flex gap-8 mt-16">
+        <button class="btn btn-primary btn-sm btn-block" id="edit-save">Save Changes</button>
+        <button class="btn btn-secondary btn-sm btn-block" id="edit-cancel-btn">Cancel</button>
+      </div>
+    `;
+
+    el.querySelector('#edit-cancel')?.addEventListener('click', () => {
+      editing = false;
+      editData = null;
+      renderDetail();
+    });
+
+    el.querySelector('#edit-cancel-btn')?.addEventListener('click', () => {
+      editing = false;
+      editData = null;
+      renderDetail();
+    });
+
+    el.querySelector('#edit-notes')?.addEventListener('input', (e) => {
+      editData.notes = e.target.value;
+    });
+
+    el.querySelectorAll('.edit-weight').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const ex = parseInt(e.target.dataset.ex, 10);
+        const set = parseInt(e.target.dataset.set, 10);
+        editData.exercises[ex].sets[set].weight = Math.max(0, Math.min(parseFloat(e.target.value) || 0, 9999));
+      });
+    });
+
+    el.querySelectorAll('.edit-reps').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const ex = parseInt(e.target.dataset.ex, 10);
+        const set = parseInt(e.target.dataset.set, 10);
+        editData.exercises[ex].sets[set].reps = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, 9999));
+      });
+    });
+
+    el.querySelectorAll('.edit-completed').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ex = parseInt(btn.dataset.ex, 10);
+        const set = parseInt(btn.dataset.set, 10);
+        editData.exercises[ex].sets[set].completed = !editData.exercises[ex].sets[set].completed;
+        btn.classList.toggle('checked');
+      });
+    });
+
+    el.querySelectorAll('.edit-add-set').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const exIdx = parseInt(btn.dataset.ex, 10);
+        const lastSet = editData.exercises[exIdx].sets.at(-1);
+        editData.exercises[exIdx].sets.push({
+          reps: lastSet?.reps || 10,
+          weight: lastSet?.weight || 0,
+          completed: false
+        });
+        renderDetail();
+      });
+    });
+
+    el.querySelectorAll('.edit-remove-set').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const exIdx = parseInt(btn.dataset.ex, 10);
+        const setIdx = parseInt(btn.dataset.set, 10);
+        if (editData.exercises[exIdx].sets.length <= 1) {
+          showToast('Use "Remove" to delete the exercise');
+          return;
+        }
+        editData.exercises[exIdx].sets.splice(setIdx, 1);
+        renderDetail();
+      });
+    });
+
+    el.querySelectorAll('.edit-remove-exercise').forEach(btn => {
+      btn.addEventListener('click', () => {
+        editData.exercises.splice(parseInt(btn.dataset.idx, 10), 1);
+        renderDetail();
+      });
+    });
+
+    el.querySelector('#edit-save')?.addEventListener('click', () => {
+      Object.assign(workout, editData);
+      store.saveWorkout(workout);
+      editing = false;
+      editData = null;
+      showToast('Workout updated');
+      close();
+      historyPage(container);
+    });
+  }
+
+  close = showModal(el);
+  renderDetail();
 }
 
 // ===== CALENDAR HEATMAP =====

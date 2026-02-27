@@ -106,6 +106,27 @@ export const store = {
     return settings;
   },
 
+  // Custom exercises
+  getCustomExercises() {
+    return this.get('customExercises', []);
+  },
+
+  saveCustomExercise(exercise) {
+    const exercises = this.getCustomExercises();
+    const exists = exercises.some(e => e.name.toLowerCase() === exercise.name.toLowerCase());
+    if (!exists) {
+      exercises.push(exercise);
+      this.set('customExercises', exercises);
+    }
+  },
+
+  deleteCustomExercise(name) {
+    const exercises = this.getCustomExercises().filter(
+      e => e.name.toLowerCase() !== name.toLowerCase()
+    );
+    this.set('customExercises', exercises);
+  },
+
   // Active workout (in progress)
   getActiveWorkout() {
     return this.get('activeWorkout', null);

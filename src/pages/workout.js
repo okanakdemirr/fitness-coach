@@ -34,12 +34,20 @@ function renderWorkoutStart(container) {
   container.innerHTML = `
     <p class="page-title">Start Workout</p>
 
-    <button class="btn btn-primary btn-lg btn-block mb-24" id="start-empty">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
-      Start Empty Workout
-    </button>
+    <div class="flex gap-8 mb-24">
+      <button class="btn btn-primary btn-lg btn-block" id="start-empty">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Start Workout
+      </button>
+      <button class="btn btn-secondary btn-lg" id="create-template" style="flex-shrink:0">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <path d="M9 12h6M12 9v6"/>
+        </svg>
+      </button>
+    </div>
 
     ${templates.length > 0 ? `
       <p class="section-title">Templates</p>
@@ -59,7 +67,7 @@ function renderWorkoutStart(container) {
           <rect x="3" y="3" width="18" height="18" rx="3"/>
           <path d="M9 12h6M12 9v6"/>
         </svg>
-        <p>No templates yet.<br>Finish a workout and save it as a template!</p>
+        <p>No templates yet.<br>Create one using the button above!</p>
       </div>
     `}
   `;
@@ -67,6 +75,10 @@ function renderWorkoutStart(container) {
   container.querySelector('#start-empty').addEventListener('click', () => {
     startNewWorkout([]);
     renderActiveWorkout(container);
+  });
+
+  container.querySelector('#create-template').addEventListener('click', () => {
+    showTemplateCreator(container);
   });
 
   container.querySelectorAll('.start-template').forEach(btn => {
@@ -388,7 +400,9 @@ function showExercisePicker(container, settings) {
   }
 
   function render() {
-    const filtered = exerciseDB.filter(ex => {
+    const customExercises = store.getCustomExercises();
+    const allExercises = [...exerciseDB, ...customExercises];
+    const filtered = allExercises.filter(ex => {
       const matchCat = filterCategory === 'all' || ex.category === filterCategory;
       const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCat && matchSearch;
@@ -411,18 +425,21 @@ function showExercisePicker(container, settings) {
         `).join('')}
       </div>
       <div style="max-height:300px;overflow-y:auto">
-        ${filtered.map(ex => `
-          <div class="list-item exercise-pick" data-name="${ex.name}" data-cat="${ex.category}">
+        ${filtered.map(ex => {
+          const isCustom = customExercises.some(c => c.name === ex.name);
+          return `
+          <div class="list-item exercise-pick" data-name="${escapeHtml(ex.name)}" data-cat="${ex.category}">
             <div class="list-item-content">
-              <div class="list-item-title">${ex.name}</div>
+              <div class="list-item-title">${escapeHtml(ex.name)}${isCustom ? ' <span class="text-sm text-accent">(custom)</span>' : ''}</div>
               <div class="list-item-subtitle">${ex.category}</div>
             </div>
-          </div>
-        `).join('')}
+            ${isCustom ? '<button class="btn btn-sm btn-ghost delete-custom-exercise" data-custom-name="' + escapeHtml(ex.name) + '" title="Delete custom exercise" style="flex-shrink:0">&times;</button>' : ''}
+          </div>`;
+        }).join('')}
         <div class="list-item exercise-pick" data-name="custom" data-cat="custom">
           <div class="list-item-content">
             <div class="list-item-title text-accent">+ Custom Exercise</div>
-            <div class="list-item-subtitle">Add your own exercise</div>
+            <div class="list-item-subtitle">Create and save your own exercise</div>
           </div>
         </div>
       </div>
@@ -465,9 +482,23 @@ function showExercisePicker(container, settings) {
     if (e.target.closest('#custom-add')) {
       const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
       if (name && customCategory) {
+        store.saveCustomExercise({ name, category: customCategory });
         addExerciseToWorkout(name, customCategory, container, settings);
         close();
       }
+      return;
+    }
+
+    // Delete custom exercise
+    const deleteBtn = e.target.closest('.delete-custom-exercise');
+    if (deleteBtn) {
+      e.stopPropagation();
+      const nameToDelete = deleteBtn.dataset.customName;
+      store.deleteCustomExercise(nameToDelete);
+      showToast(`${nameToDelete} removed from custom exercises`);
+      render();
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
       return;
     }
 
@@ -521,6 +552,300 @@ function addExerciseToWorkout(name, category, container, settings) {
   store.setActiveWorkout(activeWorkout);
   renderExercises(container, settings);
   showToast(`${name} added`);
+}
+
+function showTemplateCreator(container) {
+  const templateExercises = [];
+
+  function renderCreator() {
+    const settings = store.getSettings();
+    const unit = settings.weightUnit || 'kg';
+    container.innerHTML = `
+      <div class="flex items-center justify-between mb-16">
+        <p class="page-title" style="margin:0">Create Template</p>
+        <button class="btn btn-sm btn-ghost" id="tpl-cancel">Cancel</button>
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Template Name</label>
+        <input type="text" class="input" id="tpl-name" placeholder="e.g. Chest Day" maxlength="100">
+      </div>
+
+      <div id="tpl-exercises-list">
+        ${templateExercises.map((ex, exIdx) => `
+          <div class="exercise-block" data-exercise="${exIdx}">
+            <div class="exercise-block-header">
+              <div>
+                <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
+                <div class="exercise-block-category">${ex.category}</div>
+              </div>
+              <button class="btn btn-sm btn-ghost tpl-remove-exercise" data-idx="${exIdx}">Remove</button>
+            </div>
+            <div class="exercise-block-body">
+              <div class="set-header" style="grid-template-columns:40px 1fr 1fr">
+                <span>Set</span>
+                <span>Reps</span>
+                <span></span>
+              </div>
+              ${ex.sets.map((set, setIdx) => `
+                <div class="set-row" style="grid-template-columns:40px 1fr 36px">
+                  <span class="set-number">${setIdx + 1}</span>
+                  <input type="number" class="input tpl-set-reps" data-ex="${exIdx}" data-set="${setIdx}"
+                    value="${set.reps || ''}" placeholder="10" min="0" inputmode="numeric">
+                  <button class="remove-set tpl-remove-set" data-ex="${exIdx}" data-set="${setIdx}" title="Remove set">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                      <path d="M18 6L6 18M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </div>
+              `).join('')}
+              <button class="add-set-btn tpl-add-set" data-ex="${exIdx}">+ Add Set</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <button class="add-exercise-btn mb-16" id="tpl-add-exercise">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Add Exercise
+      </button>
+
+      ${templateExercises.length > 0 ? `
+        <button class="btn btn-primary btn-lg btn-block" id="tpl-save">Save Template</button>
+      ` : ''}
+    `;
+
+    container.querySelector('#tpl-cancel').addEventListener('click', () => {
+      renderWorkoutStart(container);
+    });
+
+    container.querySelector('#tpl-add-exercise').addEventListener('click', () => {
+      showTemplateExercisePicker(templateExercises, renderCreator);
+    });
+
+    container.querySelector('#tpl-save')?.addEventListener('click', () => {
+      const name = container.querySelector('#tpl-name').value.trim().slice(0, 100);
+      if (!name) {
+        showToast('Please enter a template name', 'error');
+        container.querySelector('#tpl-name').focus();
+        return;
+      }
+      store.saveTemplate({
+        id: generateId('t_'),
+        name,
+        exercises: templateExercises.map(ex => ({
+          name: ex.name,
+          category: ex.category,
+          targetSets: ex.sets.length,
+          targetReps: ex.sets[0]?.reps || 10
+        }))
+      });
+      showToast('Template saved!');
+      renderWorkoutStart(container);
+    });
+
+    container.querySelectorAll('.tpl-remove-exercise').forEach(btn => {
+      btn.addEventListener('click', () => {
+        templateExercises.splice(parseInt(btn.dataset.idx, 10), 1);
+        renderCreator();
+      });
+    });
+
+    container.querySelectorAll('.tpl-set-reps').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const ex = parseInt(e.target.dataset.ex, 10);
+        const set = parseInt(e.target.dataset.set, 10);
+        templateExercises[ex].sets[set].reps = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, 9999));
+      });
+    });
+
+    container.querySelectorAll('.tpl-add-set').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const exIdx = parseInt(btn.dataset.ex, 10);
+        const lastSet = templateExercises[exIdx].sets.at(-1);
+        templateExercises[exIdx].sets.push({ reps: lastSet?.reps || 10 });
+        renderCreator();
+      });
+    });
+
+    container.querySelectorAll('.tpl-remove-set').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const exIdx = parseInt(btn.dataset.ex, 10);
+        const setIdx = parseInt(btn.dataset.set, 10);
+        if (templateExercises[exIdx].sets.length <= 1) {
+          showToast('Use "Remove" to delete the exercise');
+          return;
+        }
+        templateExercises[exIdx].sets.splice(setIdx, 1);
+        renderCreator();
+      });
+    });
+  }
+
+  renderCreator();
+}
+
+function showTemplateExercisePicker(templateExercises, onDone) {
+  const el = document.createElement('div');
+  let filterCategory = 'all';
+  let searchQuery = '';
+  let customName = '';
+  let customCategory = '';
+
+  function updateCustomAddButton() {
+    const btn = el.querySelector('#custom-add');
+    if (btn) btn.disabled = !(customName.trim() && customCategory);
+  }
+
+  function renderCustomForm() {
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Create Custom Exercise</h3>
+        <button class="modal-close" id="picker-close">&times;</button>
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Exercise Name</label>
+        <input type="text" class="input" id="custom-name" placeholder="Exercise name" maxlength="100">
+      </div>
+      <div class="mb-16">
+        <label class="input-label">Target Group</label>
+        <div class="chip-group">
+          ${categories.filter(c => c.id !== 'all').map(c => `
+            <button class="chip ${c.id === customCategory ? 'active' : ''}" data-custom-cat="${c.id}">${c.name}</button>
+          `).join('')}
+        </div>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-primary btn-block" id="custom-add" disabled>Add Exercise</button>
+        <button class="btn btn-secondary btn-block" id="custom-back">Back</button>
+      </div>
+    `;
+  }
+
+  function render() {
+    const customExercises = store.getCustomExercises();
+    const allExercises = [...exerciseDB, ...customExercises];
+    const filtered = allExercises.filter(ex => {
+      const matchCat = filterCategory === 'all' || ex.category === filterCategory;
+      const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchCat && matchSearch;
+    });
+
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Add Exercise</h3>
+        <button class="modal-close" id="picker-close">&times;</button>
+      </div>
+      <div class="exercise-search mb-12">
+        <svg class="exercise-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" class="input" id="exercise-search" placeholder="Search exercises..." value="${searchQuery}">
+      </div>
+      <div class="chip-group mb-16">
+        ${categories.map(c => `
+          <button class="chip ${c.id === filterCategory ? 'active' : ''}" data-cat="${c.id}">${c.name}</button>
+        `).join('')}
+      </div>
+      <div style="max-height:300px;overflow-y:auto">
+        ${filtered.map(ex => {
+          const isCustom = customExercises.some(c => c.name === ex.name);
+          return `
+          <div class="list-item exercise-pick" data-name="${escapeHtml(ex.name)}" data-cat="${ex.category}">
+            <div class="list-item-content">
+              <div class="list-item-title">${escapeHtml(ex.name)}${isCustom ? ' <span class="text-sm text-accent">(custom)</span>' : ''}</div>
+              <div class="list-item-subtitle">${ex.category}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div class="list-item exercise-pick" data-name="custom" data-cat="custom">
+          <div class="list-item-content">
+            <div class="list-item-title text-accent">+ Custom Exercise</div>
+            <div class="list-item-subtitle">Create and save your own exercise</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  render();
+  const close = showModal(el);
+
+  el.addEventListener('click', (e) => {
+    if (e.target.closest('#picker-close')) { close(); return; }
+
+    const chip = e.target.closest('[data-cat]');
+    if (chip && !chip.classList.contains('exercise-pick')) {
+      filterCategory = chip.dataset.cat;
+      render();
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+      return;
+    }
+
+    const customChip = e.target.closest('[data-custom-cat]');
+    if (customChip) {
+      customCategory = customChip.dataset.customCat;
+      el.querySelectorAll('[data-custom-cat]').forEach(c => c.classList.remove('active'));
+      customChip.classList.add('active');
+      updateCustomAddButton();
+      return;
+    }
+
+    if (e.target.closest('#custom-add')) {
+      const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
+      if (name && customCategory) {
+        store.saveCustomExercise({ name, category: customCategory });
+        templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
+        close();
+        onDone();
+        showToast(`${name} added`);
+      }
+      return;
+    }
+
+    if (e.target.closest('#custom-back')) {
+      customName = '';
+      customCategory = '';
+      render();
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+      return;
+    }
+
+    const item = e.target.closest('.exercise-pick');
+    if (item) {
+      if (item.dataset.name === 'custom') {
+        customName = '';
+        customCategory = '';
+        renderCustomForm();
+        setTimeout(() => el.querySelector('#custom-name')?.focus(), 50);
+      } else {
+        templateExercises.push({
+          name: item.dataset.name,
+          category: item.dataset.cat,
+          sets: [{ reps: 10 }]
+        });
+        close();
+        onDone();
+        showToast(`${item.dataset.name} added`);
+      }
+    }
+  });
+
+  el.addEventListener('input', (e) => {
+    if (e.target.id === 'exercise-search') {
+      searchQuery = e.target.value;
+      render();
+      const search = el.querySelector('#exercise-search');
+      if (search) { search.value = searchQuery; search.focus(); }
+    }
+    if (e.target.id === 'custom-name') {
+      customName = e.target.value;
+      updateCustomAddButton();
+    }
+  });
 }
 
 function finishWorkout(container) {

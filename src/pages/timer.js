@@ -108,10 +108,9 @@ function renderRest(el) {
 
   // Fixed presets in ascending order; highlight the one matching user's default
   const restPresets = [30, 60, 90, 120, 180, 300];
-  let selectedRest = defaultRest;
 
   el.innerHTML = `
-    <div class="timer-container">
+    <div class="timer-container" data-selected-rest="${defaultRest}">
       ${renderTimerCircle('REST')}
       ${renderControls()}
       <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
@@ -125,17 +124,34 @@ function renderRest(el) {
     </div>
   `;
 
-  // Bind chip selection — update variable and visual state
+  // Show the default time on the timer display when idle
+  if (!globalTimer.isActive) {
+    const timeEl = el.querySelector('#timer-time');
+    if (timeEl) timeEl.textContent = formatTime(defaultRest);
+  }
+
+  // Bind chip selection — store value in DOM data attribute for reliability
   el.querySelectorAll('[data-seconds]').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('[data-seconds]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      selectedRest = parseInt(btn.dataset.seconds, 10);
+      const secs = parseInt(btn.dataset.seconds, 10);
+      // Store in DOM so the play handler always reads the correct value
+      const container = el.querySelector('.timer-container');
+      if (container) container.dataset.selectedRest = secs;
+      // Update the timer display to preview the selected duration
+      const timeEl = el.querySelector('#timer-time');
+      if (timeEl && !globalTimer.isActive) {
+        timeEl.textContent = formatTime(secs);
+      }
     });
   });
 
-  // Read selected rest duration from variable when play is pressed
-  bindControls(el, () => selectedRest, false, 'rest');
+  // Read selected rest duration from DOM attribute when play is pressed
+  bindControls(el, () => {
+    const container = el.querySelector('.timer-container');
+    return parseInt(container?.dataset.selectedRest, 10) || defaultRest;
+  }, false, 'rest');
 
   if (globalTimer.isActive && globalTimer.mode === 'rest') {
     syncActiveState(el);
@@ -344,7 +360,14 @@ function bindControls(el, getInitialValue, isInterval = false, mode = 'countdown
     // Fully reset display
     const timeEl = el.querySelector('#timer-time');
     if (timeEl) {
-      timeEl.textContent = '00:00';
+      // For rest mode, show the selected preset time; for others show 00:00
+      if (mode === 'rest') {
+        const timerContainer = el.querySelector('.timer-container');
+        const restTime = parseInt(timerContainer?.dataset.selectedRest, 10);
+        timeEl.textContent = restTime > 0 ? formatTime(restTime) : '00:00';
+      } else {
+        timeEl.textContent = '00:00';
+      }
       timeEl.classList.remove('timer-time-urgent');
     }
     const progressEl = el.querySelector('#timer-progress');
@@ -413,6 +436,15 @@ function updateDisplayFromState(container, state) {
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
+
+    // For rest mode, restore the selected rest time preview instead of showing 0:00
+    if (currentMode === 'rest' && timeEl) {
+      const timerContainer = el.querySelector('.timer-container');
+      const restTime = parseInt(timerContainer?.dataset.selectedRest, 10);
+      if (restTime > 0) {
+        timeEl.textContent = formatTime(restTime);
+      }
+    }
   }
 }
 

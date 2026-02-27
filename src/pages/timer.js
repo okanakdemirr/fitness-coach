@@ -1,29 +1,25 @@
 import { store } from '../store.js';
-import {
-  formatTime, playBeep, playDoubleBeep, playTripleBeep,
-  requestWakeLock, releaseWakeLock, showToast
-} from '../utils.js';
+import { formatTime } from '../utils.js';
+import { globalTimer } from '../globalTimer.js';
 
-let timerInterval = null;
-let timeLeft = 0;
-let totalTime = 0;
-let isRunning = false;
-let currentMode = 'countdown'; // countdown | rest | interval
+const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 115;
 
-// Interval timer state
-let intervalConfig = { workTime: 30, restTime: 15, rounds: 8, prepareTime: 5 };
-let intervalState = { round: 0, phase: 'prepare', totalRounds: 8 };
-
-const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 115; // radius=115
+let currentMode = 'countdown';
+let unsubscribe = null;
 
 export function timerPage(container) {
   const settings = store.getSettings();
 
+  // If a timer is already active, sync the tab to the active mode
+  if (globalTimer.isActive) {
+    currentMode = globalTimer.mode;
+  }
+
   container.innerHTML = `
     <div class="tab-group">
-      <button class="tab active" data-mode="countdown">Countdown</button>
-      <button class="tab" data-mode="rest">Rest</button>
-      <button class="tab" data-mode="interval">Interval</button>
+      <button class="tab ${currentMode === 'countdown' ? 'active' : ''}" data-mode="countdown">Countdown</button>
+      <button class="tab ${currentMode === 'rest' ? 'active' : ''}" data-mode="rest">Rest</button>
+      <button class="tab ${currentMode === 'interval' ? 'active' : ''}" data-mode="interval">Interval</button>
     </div>
     <div id="timer-content"></div>
   `;
@@ -31,7 +27,10 @@ export function timerPage(container) {
   // Tab switching
   container.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      stopTimer();
+      // Don't switch tabs if a different timer type is active
+      if (globalTimer.isActive && globalTimer.mode !== tab.dataset.mode) {
+        return;
+      }
       container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentMode = tab.dataset.mode;
@@ -41,13 +40,16 @@ export function timerPage(container) {
 
   renderMode(container.querySelector('#timer-content'));
 
+  // Subscribe to global timer for live updates
+  unsubscribe = globalTimer.subscribe((state) => {
+    updateDisplayFromState(container, state);
+  });
+
   return () => {
-    stopTimer();
-    releaseWakeLock();
-    // Reset module state to avoid stale data on re-entry
-    timeLeft = 0;
-    totalTime = 0;
-    isRunning = false;
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
   };
 }
 
@@ -63,7 +65,7 @@ function renderCountdown(el) {
     <div class="timer-container">
       ${renderTimerCircle()}
       ${renderControls()}
-      <div class="timer-setup" id="timer-setup">
+      <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
         <p class="section-title text-center">Set Duration</p>
         <div class="flex items-center justify-center gap-16 mb-16">
           <div class="input-group" style="margin:0;width:80px">
@@ -94,7 +96,11 @@ function renderCountdown(el) {
     const secs = parseInt(el.querySelector('#set-sec').value) || 0;
     return mins * 60 + secs;
   });
-  updateDisplay(el);
+
+  // If timer is already running, sync display
+  if (globalTimer.isActive && globalTimer.mode === 'countdown') {
+    syncActiveState(el);
+  }
 }
 
 // ===== REST TIMER =====
@@ -106,7 +112,7 @@ function renderRest(el) {
     <div class="timer-container">
       ${renderTimerCircle('REST')}
       ${renderControls()}
-      <div class="timer-setup" id="timer-setup">
+      <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
         <p class="section-title text-center">Quick Rest</p>
         <div class="timer-presets">
           <button class="chip" data-seconds="30">0:30</button>
@@ -121,39 +127,46 @@ function renderRest(el) {
   `;
 
   bindPresets(el);
-  bindControls(el, () => defaultRest);
-  updateDisplay(el);
+  bindControls(el, () => defaultRest, false, 'rest');
+
+  if (globalTimer.isActive && globalTimer.mode === 'rest') {
+    syncActiveState(el);
+  }
 }
 
 // ===== INTERVAL TIMER =====
 function renderInterval(el) {
+  const config = globalTimer.isActive && globalTimer.mode === 'interval'
+    ? globalTimer.intervalConfig
+    : { workTime: 30, restTime: 15, rounds: 8 };
+
   el.innerHTML = `
     <div class="timer-container">
-      <div id="interval-status" class="hidden">
+      <div id="interval-status" class="${globalTimer.isActive && globalTimer.mode === 'interval' ? '' : 'hidden'}">
         <div class="interval-phase prepare" id="interval-phase">PREPARE</div>
         <div class="interval-info">
           <div class="interval-info-item">
-            <div class="interval-info-value" id="interval-round">0/${intervalConfig.rounds}</div>
+            <div class="interval-info-value" id="interval-round">0/${config.rounds}</div>
             <div class="interval-info-label">Round</div>
           </div>
         </div>
       </div>
       ${renderTimerCircle('INTERVAL')}
       ${renderControls()}
-      <div class="timer-setup" id="timer-setup">
+      <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
         <p class="section-title text-center">Configure Interval</p>
         <div class="flex flex-wrap justify-center gap-16 mb-16">
           <div class="input-group" style="margin:0;width:100px">
             <label class="input-label text-center">Work (sec)</label>
-            <input type="number" class="input" id="interval-work" value="${intervalConfig.workTime}" min="5" max="300" style="text-align:center">
+            <input type="number" class="input" id="interval-work" value="${config.workTime}" min="5" max="300" style="text-align:center">
           </div>
           <div class="input-group" style="margin:0;width:100px">
             <label class="input-label text-center">Rest (sec)</label>
-            <input type="number" class="input" id="interval-rest" value="${intervalConfig.restTime}" min="5" max="300" style="text-align:center">
+            <input type="number" class="input" id="interval-rest" value="${config.restTime}" min="5" max="300" style="text-align:center">
           </div>
           <div class="input-group" style="margin:0;width:100px">
             <label class="input-label text-center">Rounds</label>
-            <input type="number" class="input" id="interval-rounds" value="${intervalConfig.rounds}" min="1" max="50" style="text-align:center">
+            <input type="number" class="input" id="interval-rounds" value="${config.rounds}" min="1" max="50" style="text-align:center">
           </div>
         </div>
         <div class="timer-presets">
@@ -175,7 +188,6 @@ function renderInterval(el) {
       };
       const p = presets[btn.dataset.preset];
       if (p) {
-        intervalConfig = { ...intervalConfig, ...p };
         el.querySelector('#interval-work').value = p.workTime;
         el.querySelector('#interval-rest').value = p.restTime;
         el.querySelector('#interval-rounds').value = p.rounds;
@@ -184,14 +196,16 @@ function renderInterval(el) {
   });
 
   bindControls(el, () => {
-    intervalConfig.workTime = parseInt(el.querySelector('#interval-work').value) || 30;
-    intervalConfig.restTime = parseInt(el.querySelector('#interval-rest').value) || 15;
-    intervalConfig.rounds = parseInt(el.querySelector('#interval-rounds').value) || 8;
-    intervalState = { round: 0, phase: 'prepare', totalRounds: intervalConfig.rounds };
-    return intervalConfig.prepareTime;
+    return {
+      workTime: parseInt(el.querySelector('#interval-work').value) || 30,
+      restTime: parseInt(el.querySelector('#interval-rest').value) || 15,
+      rounds: parseInt(el.querySelector('#interval-rounds').value) || 8
+    };
   }, true);
 
-  updateDisplay(el);
+  if (globalTimer.isActive && globalTimer.mode === 'interval') {
+    syncActiveState(el);
+  }
 }
 
 // ===== SHARED RENDERING =====
@@ -229,6 +243,33 @@ function renderControls() {
   `;
 }
 
+// ===== SYNC ACTIVE STATE =====
+function syncActiveState(el) {
+  const setup = el.querySelector('#timer-setup');
+  if (setup) setup.classList.add('hidden');
+
+  updatePlayButton(el, globalTimer.isRunning);
+
+  // Update display with current state
+  const timeEl = el.querySelector('#timer-time');
+  if (timeEl) timeEl.textContent = formatTime(Math.max(0, globalTimer.timeLeft));
+
+  const progressEl = el.querySelector('#timer-progress');
+  if (progressEl) {
+    const offset = CIRCLE_CIRCUMFERENCE * (1 - globalTimer.progress);
+    progressEl.style.strokeDashoffset = offset;
+  }
+
+  const labelEl = el.querySelector('#timer-label');
+  if (labelEl) labelEl.textContent = globalTimer.label;
+
+  if (globalTimer.mode === 'interval') {
+    const status = el.querySelector('#interval-status');
+    if (status) status.classList.remove('hidden');
+    updateIntervalDisplay(el, globalTimer.intervalState);
+  }
+}
+
 // ===== CONTROL BINDING =====
 function bindPresets(el) {
   el.querySelectorAll('[data-seconds]').forEach(btn => {
@@ -244,202 +285,124 @@ function bindPresets(el) {
   });
 }
 
-function bindControls(el, getInitialTime, isInterval = false) {
+function bindControls(el, getInitialValue, isInterval = false, mode = 'countdown') {
   const playBtn = el.querySelector('#btn-play');
   const resetBtn = el.querySelector('#btn-reset');
 
   playBtn.addEventListener('click', () => {
-    if (isRunning) {
-      pauseTimer(el);
-    } else if (timeLeft > 0) {
-      resumeTimer(el, isInterval);
+    if (globalTimer.isRunning) {
+      globalTimer.pause();
+      updatePlayButton(el, false);
+    } else if (globalTimer.isPaused) {
+      globalTimer.resume();
+      updatePlayButton(el, true);
     } else {
-      const t = getInitialTime();
-      if (t > 0) {
-        startTimer(el, t, isInterval);
+      // Start new timer
+      const val = getInitialValue();
+      if (isInterval) {
+        if (val.workTime > 0) {
+          globalTimer.startInterval(val);
+          const setup = el.querySelector('#timer-setup');
+          if (setup) setup.classList.add('hidden');
+          const status = el.querySelector('#interval-status');
+          if (status) status.classList.remove('hidden');
+          updatePlayButton(el, true);
+        }
+      } else if (mode === 'rest') {
+        if (val > 0) {
+          globalTimer.startRest(val);
+          const setup = el.querySelector('#timer-setup');
+          if (setup) setup.classList.add('hidden');
+          updatePlayButton(el, true);
+        }
+      } else {
+        if (val > 0) {
+          globalTimer.startCountdown(val);
+          const setup = el.querySelector('#timer-setup');
+          if (setup) setup.classList.add('hidden');
+          updatePlayButton(el, true);
+        }
       }
     }
   });
 
   resetBtn.addEventListener('click', () => {
-    stopTimer();
-    timeLeft = 0;
-    totalTime = 0;
-    updateDisplay(el);
+    globalTimer.stop();
+    updatePlayButton(el, false);
     const setup = el.querySelector('#timer-setup');
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
+    // Reset display
+    const timeEl = el.querySelector('#timer-time');
+    if (timeEl) timeEl.textContent = '00:00';
+    const progressEl = el.querySelector('#timer-progress');
+    if (progressEl) progressEl.style.strokeDashoffset = '0';
   });
 }
 
-// ===== TIMER ENGINE =====
-function startTimer(el, seconds, isInterval = false) {
-  timeLeft = seconds;
-  totalTime = seconds;
-  isRunning = true;
-  requestWakeLock();
+// ===== DISPLAY UPDATES FROM GLOBAL STATE =====
+function updateDisplayFromState(container, state) {
+  const el = container.querySelector('#timer-content');
+  if (!el) return;
 
-  const setup = el.querySelector('#timer-setup');
-  if (setup) setup.classList.add('hidden');
-
-  if (isInterval) {
-    const status = el.querySelector('#interval-status');
-    if (status) status.classList.remove('hidden');
-    updateIntervalDisplay(el);
-  }
-
-  updateDisplay(el);
-  updatePlayButton(el, true);
-
-  timerInterval = setInterval(() => {
-    timeLeft--;
-    updateDisplay(el);
-
-    // Beep on last 3 seconds
-    if (timeLeft <= 3 && timeLeft > 0) {
-      playBeep();
-    }
-
-    if (timeLeft <= 0) {
-      if (isInterval) {
-        handleIntervalPhaseEnd(el);
-      } else {
-        timerComplete(el);
-      }
-    }
-  }, 1000);
-}
-
-function resumeTimer(el, isInterval = false) {
-  isRunning = true;
-  requestWakeLock();
-  updatePlayButton(el, true);
-
-  timerInterval = setInterval(() => {
-    timeLeft--;
-    updateDisplay(el);
-
-    if (timeLeft <= 3 && timeLeft > 0) {
-      playBeep();
-    }
-
-    if (timeLeft <= 0) {
-      if (isInterval) {
-        handleIntervalPhaseEnd(el);
-      } else {
-        timerComplete(el);
-      }
-    }
-  }, 1000);
-}
-
-function pauseTimer(el) {
-  isRunning = false;
-  clearInterval(timerInterval);
-  timerInterval = null;
-  releaseWakeLock();
-  updatePlayButton(el, false);
-}
-
-function stopTimer() {
-  isRunning = false;
-  clearInterval(timerInterval);
-  timerInterval = null;
-  releaseWakeLock();
-}
-
-function timerComplete(el) {
-  stopTimer();
-  playTripleBeep();
-  showToast('Timer complete!');
-  timeLeft = 0;
-  updateDisplay(el);
-  updatePlayButton(el, false);
-  const setup = el.querySelector('#timer-setup');
-  if (setup) setup.classList.remove('hidden');
-}
-
-// ===== INTERVAL TIMER LOGIC =====
-function handleIntervalPhaseEnd(el) {
-  const { phase, round, totalRounds } = intervalState;
-
-  if (phase === 'prepare') {
-    // Start work phase
-    intervalState.phase = 'work';
-    intervalState.round = 1;
-    timeLeft = intervalConfig.workTime;
-    totalTime = intervalConfig.workTime;
-    playDoubleBeep();
-  } else if (phase === 'work') {
-    if (round >= totalRounds) {
-      // All rounds complete
-      stopTimer();
-      playTripleBeep();
-      showToast('Workout complete!');
-      const setup = el.querySelector('#timer-setup');
-      if (setup) setup.classList.remove('hidden');
-      const status = el.querySelector('#interval-status');
-      if (status) status.classList.add('hidden');
-      updatePlayButton(el, false);
-      return;
-    }
-    // Start rest phase
-    intervalState.phase = 'rest';
-    timeLeft = intervalConfig.restTime;
-    totalTime = intervalConfig.restTime;
-    playBeep();
-  } else if (phase === 'rest') {
-    // Start next work phase
-    intervalState.phase = 'work';
-    intervalState.round++;
-    timeLeft = intervalConfig.workTime;
-    totalTime = intervalConfig.workTime;
-    playDoubleBeep();
-  }
-
-  updateIntervalDisplay(el);
-  updateDisplay(el);
-}
-
-function updateIntervalDisplay(el) {
-  const phaseEl = el.querySelector('#interval-phase');
-  const roundEl = el.querySelector('#interval-round');
-
-  if (phaseEl) {
-    phaseEl.textContent = intervalState.phase.toUpperCase();
-    phaseEl.className = `interval-phase ${intervalState.phase}`;
-  }
-  if (roundEl) {
-    roundEl.textContent = `${intervalState.round}/${intervalState.totalRounds}`;
-  }
-}
-
-// ===== DISPLAY UPDATES =====
-function updateDisplay(el) {
   const timeEl = el.querySelector('#timer-time');
   const progressEl = el.querySelector('#timer-progress');
+  const labelEl = el.querySelector('#timer-label');
 
   if (timeEl) {
-    timeEl.textContent = formatTime(Math.max(0, timeLeft));
+    timeEl.textContent = formatTime(Math.max(0, state.timeLeft));
+    // Add visual urgency class
+    timeEl.classList.toggle('timer-time-urgent', state.timeLeft <= 5 && state.timeLeft > 0);
   }
 
   if (progressEl) {
-    const progress = totalTime > 0 ? timeLeft / totalTime : 1;
-    const offset = CIRCLE_CIRCUMFERENCE * (1 - progress);
+    const offset = CIRCLE_CIRCUMFERENCE * (1 - state.progress);
     progressEl.style.strokeDashoffset = offset;
 
     // Color based on time remaining
     progressEl.classList.remove('warning', 'danger');
-    if (currentMode === 'interval') {
-      if (intervalState.phase === 'rest') progressEl.classList.add('warning');
-      else if (intervalState.phase === 'prepare') progressEl.style.stroke = 'var(--accent-secondary)';
-      else progressEl.style.stroke = '';
-    } else if (timeLeft <= 5 && timeLeft > 0) {
+    progressEl.style.stroke = '';
+    if (state.mode === 'interval') {
+      const phase = state.intervalState.phase;
+      if (phase === 'rest') progressEl.classList.add('warning');
+      else if (phase === 'prepare') progressEl.style.stroke = 'var(--accent-secondary)';
+    } else if (state.timeLeft <= 5 && state.timeLeft > 0) {
       progressEl.classList.add('danger');
-    } else if (timeLeft <= 10 && timeLeft > 0) {
+    } else if (state.timeLeft <= 10 && state.timeLeft > 0) {
       progressEl.classList.add('warning');
     }
+  }
+
+  if (labelEl) {
+    labelEl.textContent = state.label || '';
+  }
+
+  // Update interval-specific UI
+  if (state.mode === 'interval') {
+    updateIntervalDisplay(el, state.intervalState);
+  }
+
+  // Show setup when timer completes
+  if (!state.isActive && !state.isRunning) {
+    const setup = el.querySelector('#timer-setup');
+    if (setup) setup.classList.remove('hidden');
+    const status = el.querySelector('#interval-status');
+    if (status) status.classList.add('hidden');
+    updatePlayButton(el, false);
+  }
+}
+
+function updateIntervalDisplay(el, iState) {
+  const phaseEl = el.querySelector('#interval-phase');
+  const roundEl = el.querySelector('#interval-round');
+
+  if (phaseEl) {
+    phaseEl.textContent = iState.phase.toUpperCase();
+    phaseEl.className = `interval-phase ${iState.phase}`;
+  }
+  if (roundEl) {
+    roundEl.textContent = `${iState.round}/${iState.totalRounds}`;
   }
 }
 
@@ -449,6 +412,8 @@ function updatePlayButton(el, playing) {
 
   if (playing) {
     btn.className = 'timer-control-btn pause';
+    btn.title = 'Pause';
+    btn.setAttribute('aria-label', 'Pause timer');
     btn.innerHTML = `
       <svg viewBox="0 0 24 24" fill="currentColor">
         <rect x="6" y="4" width="4" height="16" rx="1"/>
@@ -457,6 +422,8 @@ function updatePlayButton(el, playing) {
     `;
   } else {
     btn.className = 'timer-control-btn play';
+    btn.title = 'Start';
+    btn.setAttribute('aria-label', 'Start timer');
     btn.innerHTML = `
       <svg viewBox="0 0 24 24" fill="currentColor">
         <polygon points="6,3 20,12 6,21"/>

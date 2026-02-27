@@ -1001,7 +1001,7 @@
   flex-shrink: 0;
 }
 
-.floating-timer-ring svg {
+.floating-timer-ring > svg {
   width: 100%;
   height: 100%;
   transform: rotate(-90deg);

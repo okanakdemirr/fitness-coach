@@ -58,7 +58,7 @@ function playTone(frequency, duration, volume = 0.25, type = 'sine') {
 
 function playCountdownTick() {
   if (!isSoundEnabled()) return;
-  playTone(660, 0.15, 0.15);
+  playTone(880, 0.15, 0.25);
 }
 
 function playWarningBeep() {
@@ -255,11 +255,9 @@ export const globalTimer = {
       if (!isRunning) return;
       timeLeft--;
 
-      // Sound cues
-      if (timeLeft === 5) {
-        playWarningBeep();
-      } else if (timeLeft <= 3 && timeLeft > 0) {
-        playBeep();
+      // Sound cues — tick every second for the last 5 seconds
+      if (timeLeft <= 5 && timeLeft > 0) {
+        playCountdownTick();
       } else if (timeLeft === 10) {
         playCountdownTick();
       }

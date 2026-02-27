@@ -306,7 +306,7 @@ function showRMTable(unit) {
 function showExerciseProgress(unit) {
   const workouts = store.getWorkouts();
   const exerciseNames = new Set();
-  workouts.forEach(w => w.exercises.forEach(e => exerciseNames.add(e.name)));
+  workouts.forEach(w => (w.exercises || []).forEach(e => exerciseNames.add(e.name)));
   const names = [...exerciseNames].sort();
 
   const el = document.createElement('div');
@@ -351,9 +351,9 @@ function renderExerciseData(container, exerciseName, workouts, unit) {
   // Collect all instances of this exercise across workouts
   const history = [];
   workouts.forEach(w => {
-    w.exercises.forEach(ex => {
+    (w.exercises || []).forEach(ex => {
       if (ex.name === exerciseName) {
-        const completedSets = ex.sets.filter(s => s.completed);
+        const completedSets = (ex.sets || []).filter(s => s.completed);
         if (completedSets.length > 0) {
           const maxWeight = Math.max(...completedSets.map(s => s.weight || 0));
           const totalVolume = completedSets.reduce((a, s) => a + (s.weight || 0) * (s.reps || 0), 0);

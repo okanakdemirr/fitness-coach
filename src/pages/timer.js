@@ -106,6 +106,9 @@ function renderRest(el) {
   const settings = store.getSettings();
   const defaultRest = settings.defaultRestTime || 90;
 
+  // Fixed presets in ascending order; highlight the one matching user's default
+  const restPresets = [30, 60, 90, 120, 180, 300];
+
   el.innerHTML = `
     <div class="timer-container">
       ${renderTimerCircle('REST')}
@@ -113,12 +116,9 @@ function renderRest(el) {
       <div class="timer-setup ${globalTimer.isActive ? 'hidden' : ''}" id="timer-setup">
         <p class="section-title text-center">Quick Rest</p>
         <div class="timer-presets">
-          <button class="chip" data-seconds="30">0:30</button>
-          <button class="chip active" data-seconds="${defaultRest}">${formatTime(defaultRest)}</button>
-          <button class="chip" data-seconds="60">1:00</button>
-          <button class="chip" data-seconds="90">1:30</button>
-          <button class="chip" data-seconds="120">2:00</button>
-          <button class="chip" data-seconds="180">3:00</button>
+          ${restPresets.map(sec => `
+            <button class="chip ${sec === defaultRest ? 'active' : ''}" data-seconds="${sec}">${formatTime(sec)}</button>
+          `).join('')}
         </div>
       </div>
     </div>
@@ -342,11 +342,20 @@ function bindControls(el, getInitialValue, isInterval = false, mode = 'countdown
     if (setup) setup.classList.remove('hidden');
     const status = el.querySelector('#interval-status');
     if (status) status.classList.add('hidden');
-    // Reset display
+    // Fully reset display
     const timeEl = el.querySelector('#timer-time');
-    if (timeEl) timeEl.textContent = '00:00';
+    if (timeEl) {
+      timeEl.textContent = '00:00';
+      timeEl.classList.remove('timer-time-urgent');
+    }
     const progressEl = el.querySelector('#timer-progress');
-    if (progressEl) progressEl.style.strokeDashoffset = '0';
+    if (progressEl) {
+      progressEl.style.strokeDashoffset = '0';
+      progressEl.classList.remove('warning', 'danger');
+      progressEl.style.stroke = '';
+    }
+    const labelEl = el.querySelector('#timer-label');
+    if (labelEl) labelEl.textContent = '';
   });
 }
 

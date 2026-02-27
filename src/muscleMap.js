@@ -1,4 +1,5 @@
 import { store } from './store.js';
+import { escapeHtml } from './utils.js';
 
 // Map exercise categories to muscle zone IDs
 const CATEGORY_MUSCLES = {
@@ -106,7 +107,7 @@ function getWorkoutsForPeriod(period) {
     }
   });
 
-  if (active && (period === 'today' || period === 'week')) {
+  if (active) {
     filtered.push(active);
   }
   return filtered;
@@ -161,10 +162,13 @@ function bodyAccents() {
   `;
 }
 
-function buildSVG(zonesMarkup, activation) {
-  return `<svg viewBox="0 0 160 410" xmlns="http://www.w3.org/2000/svg">
+let svgCounter = 0;
+
+function buildSVG(zonesMarkup) {
+  const filterId = `glow-${svgCounter++}`;
+  return `<svg viewBox="0 0 160 410" xmlns="http://www.w3.org/2000/svg" data-glow="${filterId}">
     <defs>
-      <filter id="glow">
+      <filter id="${filterId}">
         <feGaussianBlur stdDeviation="4" result="blur"/>
         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
       </filter>
@@ -202,13 +206,13 @@ export function renderMuscleMap(container) {
         <div class="muscle-map-body">
           <div class="muscle-map-view">
             <div class="muscle-map-svg" id="muscle-front">
-              ${buildSVG(frontZones(), activation)}
+              ${buildSVG(frontZones())}
             </div>
             <span class="muscle-map-label">FRONT</span>
           </div>
           <div class="muscle-map-view">
             <div class="muscle-map-svg" id="muscle-back">
-              ${buildSVG(backZones(), activation)}
+              ${buildSVG(backZones())}
             </div>
             <span class="muscle-map-label">BACK</span>
           </div>
@@ -232,7 +236,10 @@ export function renderMuscleMap(container) {
       const info = activation[zone];
       const level = info ? getIntensity(info.sets) : 0;
       el.setAttribute('data-level', level);
-      if (level >= 4) el.style.filter = 'url(#glow)';
+      if (level >= 4) {
+        const filterId = el.closest('svg').dataset.glow;
+        el.style.filter = `url(#${filterId})`;
+      }
     });
 
     // Tab click handlers
@@ -288,7 +295,7 @@ export function renderMuscleMap(container) {
                 <span class="muscle-detail-name">${label}</span>
                 <span class="muscle-detail-sets">${totalSets} sets</span>
               </div>
-              <div class="muscle-detail-exercises">${exercises.join(' &middot; ')}</div>
+              <div class="muscle-detail-exercises">${exercises.map(e => escapeHtml(e)).join(' &middot; ')}</div>
             </div>
           `;
         } else {

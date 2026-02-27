@@ -13,8 +13,12 @@ import { toolsPage } from './pages/tools.js';
 import { initFloatingTimer } from './floatingTimer.js';
 
 // Apply saved theme
-const settings = store.getSettings();
-document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+try {
+  const settings = store.getSettings();
+  document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+} catch {
+  document.documentElement.setAttribute('data-theme', 'dark');
+}
 
 // Register routes
 route('/', dashboardPage);
@@ -29,7 +33,11 @@ route('/settings', settingsPage);
 startRouter();
 
 // Initialize the global floating timer widget
-initFloatingTimer();
+try {
+  initFloatingTimer();
+} catch (err) {
+  console.error('Floating timer init failed:', err);
+}
 
 // PWA install prompt
 let deferredPrompt = null;

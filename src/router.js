@@ -21,7 +21,7 @@ function resolve() {
 
   // Cleanup previous page
   if (currentCleanup && typeof currentCleanup === 'function') {
-    currentCleanup();
+    try { currentCleanup(); } catch { /* ignore cleanup errors */ }
     currentCleanup = null;
   }
 
@@ -30,9 +30,20 @@ function resolve() {
   if (handler) {
     content.innerHTML = '';
     content.className = 'page-enter';
-    const cleanup = handler(content);
-    if (typeof cleanup === 'function') {
-      currentCleanup = cleanup;
+    try {
+      const cleanup = handler(content);
+      if (typeof cleanup === 'function') {
+        currentCleanup = cleanup;
+      }
+    } catch (err) {
+      console.error('Page render error:', err);
+      content.innerHTML = `
+        <div style="text-align:center;padding:48px 24px;color:var(--text-muted)">
+          <p style="font-size:18px;font-weight:700;margin-bottom:12px;color:var(--danger)">Something went wrong</p>
+          <p style="font-size:14px;margin-bottom:20px">This page failed to load. Try navigating to another page or refreshing.</p>
+          <button onclick="location.reload()" style="padding:10px 24px;background:var(--accent);color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer">Reload App</button>
+        </div>
+      `;
     }
   }
 

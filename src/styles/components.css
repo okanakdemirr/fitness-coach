@@ -288,7 +288,7 @@ select.input {
 /* ===== EXERCISE SET ROW ===== */
 .set-row {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr 48px;
+  grid-template-columns: 40px 1fr 1fr 48px 36px;
   gap: 8px;
   align-items: center;
   padding: 8px 0;
@@ -327,9 +327,29 @@ select.input {
   color: #0f0f1a;
 }
 
+.remove-set {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all var(--transition);
+  padding: 0;
+}
+
+.remove-set:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
 .set-header {
   display: grid;
-  grid-template-columns: 40px 1fr 1fr 48px;
+  grid-template-columns: 40px 1fr 1fr 48px 36px;
   gap: 8px;
   padding: 4px 0;
   font-size: 12px;

@@ -206,6 +206,7 @@ function renderExercises(container, settings) {
           <span>${unit}</span>
           <span>Reps</span>
           <span></span>
+          <span></span>
         </div>
         ${ex.sets.map((set, setIdx) => `
           <div class="set-row">
@@ -217,6 +218,11 @@ function renderExercises(container, settings) {
             <button class="set-check ${set.completed ? 'checked' : ''}" data-ex="${exIdx}" data-set="${setIdx}">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3">
                 <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </button>
+            <button class="remove-set" data-ex="${exIdx}" data-set="${setIdx}" title="Remove set">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
@@ -286,6 +292,21 @@ function renderExercises(container, settings) {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.idx, 10);
       activeWorkout.exercises.splice(idx, 1);
+      store.setActiveWorkout(activeWorkout);
+      renderExercises(container, settings);
+    });
+  });
+
+  list.querySelectorAll('.remove-set').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIdx = parseInt(btn.dataset.ex, 10);
+      const setIdx = parseInt(btn.dataset.set, 10);
+      const exercise = activeWorkout.exercises[exIdx];
+      if (exercise.sets.length <= 1) {
+        showToast('Use "Remove" to delete the exercise');
+        return;
+      }
+      exercise.sets.splice(setIdx, 1);
       store.setActiveWorkout(activeWorkout);
       renderExercises(container, settings);
     });

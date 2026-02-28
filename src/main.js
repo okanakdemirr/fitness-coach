@@ -10,6 +10,7 @@ import { historyPage } from './pages/history.js';
 import { statsPage } from './pages/stats.js';
 import { settingsPage } from './pages/settings.js';
 import { toolsPage } from './pages/tools.js';
+import { weightPage } from './pages/weight.js';
 import { initFloatingTimer } from './floatingTimer.js';
 
 // Apply saved theme
@@ -28,6 +29,7 @@ route('/workout', workoutPage);
 route('/history', historyPage);
 route('/stats', statsPage);
 route('/tools', toolsPage);
+route('/weight', weightPage);
 route('/settings', settingsPage);
 
 // Start the router

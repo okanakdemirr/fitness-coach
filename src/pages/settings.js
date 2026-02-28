@@ -1,6 +1,5 @@
 import { store } from '../store.js';
 import { showToast, showModal } from '../utils.js';
-import { navigate } from '../router.js';
 
 export function settingsPage(container) {
   const settings = store.getSettings();
@@ -71,20 +70,13 @@ export function settingsPage(container) {
 
     <p class="section-title">Body Stats</p>
     <div class="settings-group">
-      <div class="settings-item" style="cursor:pointer" id="log-weight-btn">
+      <a href="#/weight" class="settings-item" style="cursor:pointer;text-decoration:none;color:inherit">
         <div>
-          <div class="settings-item-label">Log Weight</div>
+          <div class="settings-item-label">Weight Tracking</div>
           <div class="settings-item-desc">${bodyStats.length > 0 ? `Latest: ${bodyStats[0].weight} ${bodyStats[0].unit || settings.weightUnit}` : 'Track your body weight'}</div>
         </div>
-        <span class="text-accent">+</span>
-      </div>
-      <div class="settings-item" style="cursor:pointer" id="view-weight-btn">
-        <div>
-          <div class="settings-item-label">Weight History</div>
-          <div class="settings-item-desc">${bodyStats.length} entries</div>
-        </div>
         <span class="text-muted">&rsaquo;</span>
-      </div>
+      </a>
     </div>
 
     <p class="section-title">Data</p>
@@ -146,16 +138,6 @@ export function settingsPage(container) {
   container.querySelector('#weekly-goal').addEventListener('change', (e) => {
     store.updateSettings({ weeklyGoal: parseInt(e.target.value) });
     showToast(`Weekly goal set to ${e.target.value}`);
-  });
-
-  // Log weight
-  container.querySelector('#log-weight-btn').addEventListener('click', () => {
-    showLogWeight(container);
-  });
-
-  // View weight history
-  container.querySelector('#view-weight-btn').addEventListener('click', () => {
-    showWeightHistory();
   });
 
   // Export
@@ -253,73 +235,3 @@ export function settingsPage(container) {
   });
 }
 
-function showLogWeight(container) {
-  const settings = store.getSettings();
-  const el = document.createElement('div');
-
-  el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Log Weight</h3>
-      <button class="modal-close" id="log-close">&times;</button>
-    </div>
-    <div class="input-group">
-      <label class="input-label">Weight (${settings.weightUnit})</label>
-      <input type="number" class="input" id="weight-input" placeholder="0" inputmode="decimal" step="0.1">
-    </div>
-    <div class="input-group">
-      <label class="input-label">Date</label>
-      <input type="date" class="input" id="weight-date" value="${new Date().toISOString().split('T')[0]}">
-    </div>
-    <button class="btn btn-primary btn-block" id="save-weight">Save</button>
-  `;
-
-  const close = showModal(el);
-
-  setTimeout(() => {
-    el.querySelector('#log-close')?.addEventListener('click', close);
-    el.querySelector('#weight-input')?.focus();
-
-    el.querySelector('#save-weight')?.addEventListener('click', () => {
-      const weight = parseFloat(el.querySelector('#weight-input').value);
-      const date = el.querySelector('#weight-date').value;
-      if (!weight || !date) {
-        showToast('Please enter a weight', 'error');
-        return;
-      }
-      store.addBodyStat({ date, weight, unit: settings.weightUnit });
-      close();
-      showToast('Weight logged!');
-      settingsPage(container);
-    });
-  }, 100);
-}
-
-function showWeightHistory() {
-  const stats = store.getBodyStats();
-  const settings = store.getSettings();
-
-  const el = document.createElement('div');
-  el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Weight History</h3>
-      <button class="modal-close" id="hist-close">&times;</button>
-    </div>
-    ${stats.length === 0 ? `
-      <p class="text-muted text-center">No entries yet</p>
-    ` : `
-      <div style="max-height:400px;overflow-y:auto">
-        ${stats.map(s => `
-          <div class="body-stat-entry">
-            <span class="body-stat-date">${new Date(s.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-            <span class="body-stat-value">${s.weight} ${s.unit || settings.weightUnit}</span>
-          </div>
-        `).join('')}
-      </div>
-    `}
-  `;
-
-  const close = showModal(el);
-  setTimeout(() => {
-    el.querySelector('#hist-close')?.addEventListener('click', close);
-  }, 50);
-}

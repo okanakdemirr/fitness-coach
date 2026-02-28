@@ -135,7 +135,6 @@ body {
   border-top: 1px solid var(--border);
   padding: 0 env(safe-area-inset-left, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-right, 0px);
   transform: translateZ(0);
-  -webkit-transform: translateZ(0);
 }
 
 .nav-item {

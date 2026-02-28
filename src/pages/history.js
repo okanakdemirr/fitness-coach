@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { formatDate, formatDateFull, formatDuration, showModal, showToast, escapeHtml } from '../utils.js';
+import { formatDate, formatDateFull, formatDuration, showModal, showToast, escapeHtml, parseDecimal } from '../utils.js';
 
 export function historyPage(container) {
   const workouts = store.getWorkouts();
@@ -174,8 +174,8 @@ function showWorkoutDetail(workout, unit, container) {
           ${(ex.sets || []).map((set, setIdx) => `
             <div class="set-row">
               <span class="set-number">${setIdx + 1}</span>
-              <input type="number" class="input edit-weight" data-ex="${exIdx}" data-set="${setIdx}"
-                value="${set.weight || ''}" placeholder="0" min="0" inputmode="decimal">
+              <input type="text" class="input edit-weight" data-ex="${exIdx}" data-set="${setIdx}"
+                value="${set.weight || ''}" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
               <input type="number" class="input edit-reps" data-ex="${exIdx}" data-set="${setIdx}"
                 value="${set.reps || ''}" placeholder="0" min="0" inputmode="numeric">
               <button class="set-check ${set.completed ? 'checked' : ''} edit-completed" data-ex="${exIdx}" data-set="${setIdx}">
@@ -219,7 +219,7 @@ function showWorkoutDetail(workout, unit, container) {
       input.addEventListener('change', (e) => {
         const ex = parseInt(e.target.dataset.ex, 10);
         const set = parseInt(e.target.dataset.set, 10);
-        editData.exercises[ex].sets[set].weight = Math.max(0, Math.min(parseFloat(e.target.value) || 0, 9999));
+        editData.exercises[ex].sets[set].weight = Math.max(0, Math.min(parseDecimal(e.target.value) || 0, 9999));
       });
     });
 

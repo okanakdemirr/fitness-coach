@@ -1,6 +1,6 @@
 import { store } from '../store.js';
 import { exercises as exerciseDB, categories } from '../data/exercises.js';
-import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep, escapeHtml } from '../utils.js';
+import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep, escapeHtml, parseDecimal } from '../utils.js';
 import { globalTimer } from '../globalTimer.js';
 
 let activeWorkout = null;
@@ -223,8 +223,8 @@ function renderExercises(container, settings) {
         ${ex.sets.map((set, setIdx) => `
           <div class="set-row">
             <span class="set-number">${setIdx + 1}</span>
-            <input type="number" class="input set-weight" data-ex="${exIdx}" data-set="${setIdx}"
-              value="${set.weight || ''}" placeholder="0" min="0" inputmode="decimal">
+            <input type="text" class="input set-weight" data-ex="${exIdx}" data-set="${setIdx}"
+              value="${set.weight || ''}" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
             <input type="number" class="input set-reps" data-ex="${exIdx}" data-set="${setIdx}"
               value="${set.reps || ''}" placeholder="0" min="0" inputmode="numeric">
             <button class="set-check ${set.completed ? 'checked' : ''}" data-ex="${exIdx}" data-set="${setIdx}">
@@ -249,7 +249,7 @@ function renderExercises(container, settings) {
     input.addEventListener('change', (e) => {
       const ex = parseInt(e.target.dataset.ex, 10);
       const set = parseInt(e.target.dataset.set, 10);
-      let val = parseFloat(e.target.value) || 0;
+      let val = parseDecimal(e.target.value) || 0;
       val = Math.max(0, Math.min(val, 9999));
       e.target.value = val || '';
       activeWorkout.exercises[ex].sets[set].weight = val;
@@ -353,11 +353,20 @@ function showCategoryPicker(exIdx, container, settings) {
     if (e.target.closest('#catpick-close')) { close(); return; }
     const chip = e.target.closest('[data-pick-cat]');
     if (chip) {
-      activeWorkout.exercises[exIdx].category = chip.dataset.pickCat;
+      const newCategory = chip.dataset.pickCat;
+      const exerciseName = activeWorkout.exercises[exIdx].name;
+      activeWorkout.exercises[exIdx].category = newCategory;
       store.setActiveWorkout(activeWorkout);
+
+      // Propagate to custom exercise definition and all historical workouts
+      const customExercises = store.getCustomExercises();
+      if (customExercises.some(e => e.name.toLowerCase() === exerciseName.toLowerCase())) {
+        store.updateCustomExercise({ name: exerciseName, category: newCategory });
+      }
+
       renderExercises(container, settings);
       close();
-      showToast(`Target group changed to ${chip.dataset.pickCat}`);
+      showToast(`Target group changed to ${newCategory}`);
     }
   });
 }
@@ -482,9 +491,35 @@ function showExercisePicker(container, settings) {
     if (e.target.closest('#custom-add')) {
       const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
       if (name && customCategory) {
-        store.saveCustomExercise({ name, category: customCategory });
-        addExerciseToWorkout(name, customCategory, container, settings);
-        close();
+        const result = store.saveCustomExercise({ name, category: customCategory });
+        if (result.saved) {
+          addExerciseToWorkout(name, customCategory, container, settings);
+          close();
+        } else {
+          const existing = result.existing;
+          close();
+          const confirmEl = document.createElement('div');
+          confirmEl.innerHTML = `
+            <div class="modal-header">
+              <h3 class="modal-title">Exercise Exists</h3>
+              <button class="modal-close" id="dup-cancel">&times;</button>
+            </div>
+            <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existing.category)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(customCategory)}</strong>"?</p>
+            <div class="flex gap-8">
+              <button class="btn btn-primary btn-block" id="dup-update">Update</button>
+              <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
+            </div>
+          `;
+          const closeConfirm = showModal(confirmEl);
+          confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
+          confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
+          confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
+            store.updateCustomExercise({ name, category: customCategory });
+            addExerciseToWorkout(name, customCategory, container, settings);
+            closeConfirm();
+            showToast(`${name} updated`);
+          });
+        }
       }
       return;
     }
@@ -796,11 +831,38 @@ function showTemplateExercisePicker(templateExercises, onDone) {
     if (e.target.closest('#custom-add')) {
       const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
       if (name && customCategory) {
-        store.saveCustomExercise({ name, category: customCategory });
-        templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
-        close();
-        onDone();
-        showToast(`${name} added`);
+        const result = store.saveCustomExercise({ name, category: customCategory });
+        if (result.saved) {
+          templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
+          close();
+          onDone();
+          showToast(`${name} added`);
+        } else {
+          const existing = result.existing;
+          close();
+          const confirmEl = document.createElement('div');
+          confirmEl.innerHTML = `
+            <div class="modal-header">
+              <h3 class="modal-title">Exercise Exists</h3>
+              <button class="modal-close" id="dup-cancel">&times;</button>
+            </div>
+            <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existing.category)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(customCategory)}</strong>"?</p>
+            <div class="flex gap-8">
+              <button class="btn btn-primary btn-block" id="dup-update">Update</button>
+              <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
+            </div>
+          `;
+          const closeConfirm = showModal(confirmEl);
+          confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
+          confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
+          confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
+            store.updateCustomExercise({ name, category: customCategory });
+            templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
+            closeConfirm();
+            onDone();
+            showToast(`${name} updated`);
+          });
+        }
       }
       return;
     }

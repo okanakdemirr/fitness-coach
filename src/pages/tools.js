@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { showModal, showToast } from '../utils.js';
+import { showModal, showToast, parseDecimal } from '../utils.js';
 
 export function toolsPage(container) {
   const settings = store.getSettings();
@@ -65,6 +65,16 @@ export function toolsPage(container) {
         <div class="tool-name">Stopwatch</div>
         <div class="tool-desc">Count up timer with laps</div>
       </div>
+
+      <div class="tool-card" id="tool-weight">
+        <div class="tool-icon" style="background: rgba(255,159,67,0.15); color: #ff9f43">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3a4 4 0 0 0-4 4c0 1.5.8 2.8 2 3.4V21h4V10.4c1.2-.6 2-1.9 2-3.4a4 4 0 0 0-4-4z"/>
+          </svg>
+        </div>
+        <div class="tool-name">Log Weight</div>
+        <div class="tool-desc">Track body weight</div>
+      </div>
     </div>
   `;
 
@@ -73,6 +83,7 @@ export function toolsPage(container) {
   container.querySelector('#tool-rm-table').addEventListener('click', () => showRMTable(unit));
   container.querySelector('#tool-progress').addEventListener('click', () => showExerciseProgress(unit));
   container.querySelector('#tool-stopwatch').addEventListener('click', () => showStopwatch());
+  container.querySelector('#tool-weight').addEventListener('click', () => { window.location.hash = '#/weight'; });
 }
 
 // ===== 1RM CALCULATOR =====
@@ -87,7 +98,7 @@ function show1RMCalculator(unit) {
     <p class="text-muted text-sm mb-16">Estimate your one-rep max from a set you completed.</p>
     <div class="input-group">
       <label class="input-label">Weight lifted (${unit})</label>
-      <input type="number" class="input" id="orm-weight" placeholder="e.g. 80" inputmode="decimal">
+      <input type="text" class="input" id="orm-weight" placeholder="e.g. 80" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <div class="input-group">
       <label class="input-label">Reps completed</label>
@@ -102,7 +113,7 @@ function show1RMCalculator(unit) {
   setTimeout(() => {
     el.querySelector('#close-1rm')?.addEventListener('click', close);
     el.querySelector('#calc-1rm')?.addEventListener('click', () => {
-      const weight = parseFloat(el.querySelector('#orm-weight').value);
+      const weight = parseDecimal(el.querySelector('#orm-weight').value);
       const reps = parseInt(el.querySelector('#orm-reps').value);
 
       if (!weight || !reps || reps < 1) {
@@ -170,7 +181,7 @@ function showBMICalculator(unit) {
     </div>
     <div class="input-group">
       <label class="input-label">Weight (${unit})</label>
-      <input type="number" class="input" id="bmi-weight" placeholder="e.g. 75" inputmode="decimal">
+      <input type="text" class="input" id="bmi-weight" placeholder="e.g. 75" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <div class="input-group">
       <label class="input-label">Height (cm)</label>
@@ -185,7 +196,7 @@ function showBMICalculator(unit) {
   setTimeout(() => {
     el.querySelector('#close-bmi')?.addEventListener('click', close);
     el.querySelector('#calc-bmi')?.addEventListener('click', () => {
-      let weight = parseFloat(el.querySelector('#bmi-weight').value);
+      let weight = parseDecimal(el.querySelector('#bmi-weight').value);
       const heightCm = parseFloat(el.querySelector('#bmi-height').value);
 
       if (!weight || !heightCm) {
@@ -248,7 +259,7 @@ function showRMTable(unit) {
     <p class="text-muted text-sm mb-12">Enter your 1RM to see working weights.</p>
     <div class="input-group">
       <label class="input-label">1RM Weight (${unit})</label>
-      <input type="number" class="input" id="rm-1rm" placeholder="e.g. 100" inputmode="decimal">
+      <input type="text" class="input" id="rm-1rm" placeholder="e.g. 100" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
     </div>
     <button class="btn btn-primary btn-block mb-16" id="calc-rm">Generate Table</button>
     <div id="rm-results"></div>
@@ -259,7 +270,7 @@ function showRMTable(unit) {
   setTimeout(() => {
     el.querySelector('#close-rm')?.addEventListener('click', close);
     el.querySelector('#calc-rm')?.addEventListener('click', () => {
-      const orm = parseFloat(el.querySelector('#rm-1rm').value);
+      const orm = parseDecimal(el.querySelector('#rm-1rm').value);
       if (!orm) { showToast('Enter your 1RM', 'error'); return; }
 
       const rows = [

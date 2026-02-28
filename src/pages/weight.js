@@ -1,40 +1,51 @@
 import { store } from '../store.js';
-import { showToast, showModal, escapeHtml } from '../utils.js';
+import { showToast, showModal, escapeHtml, formatDate, todayStr } from '../utils.js';
 
 export function weightPage(container) {
   const settings = store.getSettings();
   const unit = settings.weightUnit || 'kg';
 
   render(container, unit);
+
+  return () => {
+    const overlay = document.getElementById('modal-overlay');
+    if (overlay && !overlay.classList.contains('hidden')) {
+      overlay.classList.add('hidden');
+      overlay.classList.remove('visible');
+      overlay.innerHTML = '';
+    }
+  };
 }
 
 function render(container, unit) {
   const stats = store.getBodyStats();
   const now = new Date();
-  const defaultDate = now.toISOString().split('T')[0];
+  const defaultDate = todayStr();
   const defaultTime = now.toTimeString().slice(0, 5);
+  const escapedUnit = escapeHtml(unit);
 
   // Calculate trend info
   const latest = stats[0] || null;
   const previous = stats[1] || null;
   let trendHtml = '';
   if (latest && previous) {
-    const diff = (latest.weight - previous.weight).toFixed(1);
-    const sign = diff > 0 ? '+' : '';
-    const color = diff > 0 ? 'var(--warning)' : diff < 0 ? 'var(--accent)' : 'var(--text-muted)';
-    const arrow = diff > 0
+    const diffNum = latest.weight - previous.weight;
+    const diffStr = diffNum.toFixed(1);
+    const sign = diffNum > 0 ? '+' : '';
+    const color = diffNum > 0 ? 'var(--warning)' : diffNum < 0 ? 'var(--accent)' : 'var(--text-muted)';
+    const arrow = diffNum > 0
       ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 19V5M5 12l7-7 7 7"/></svg>'
-      : diff < 0
+      : diffNum < 0
         ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12l7 7 7-7"/></svg>'
         : '';
     trendHtml = `
       <div class="weight-trend" style="color:${color}">
-        ${arrow} ${sign}${diff} ${unit}
+        ${arrow} ${sign}${diffStr} ${escapedUnit}
       </div>
     `;
   }
 
-  // Build mini chart (last 7 entries, reversed so oldest is left)
+  // Build mini chart (last 10 entries, reversed so oldest is left)
   let chartHtml = '';
   if (stats.length >= 2) {
     const chartData = stats.slice(0, 10).reverse();
@@ -43,11 +54,11 @@ function render(container, unit) {
     const maxW = Math.max(...weights);
     const range = maxW - minW || 1;
 
-    const points = chartData.map((s, i) => {
-      const x = (i / (chartData.length - 1)) * 260 + 10;
-      const y = 80 - ((s.weight - minW) / range) * 60 + 10;
-      return `${x},${y}`;
-    }).join(' ');
+    const coords = chartData.map((s, i) => ({
+      x: (i / (chartData.length - 1)) * 260 + 10,
+      y: 80 - ((s.weight - minW) / range) * 60 + 10
+    }));
+    const points = coords.map(c => `${c.x},${c.y}`).join(' ');
 
     chartHtml = `
       <div class="weight-chart-card card">
@@ -57,15 +68,13 @@ function render(container, unit) {
         </div>
         <svg viewBox="0 0 280 100" class="weight-chart-svg">
           <polyline points="${points}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          ${chartData.map((s, i) => {
-            const x = (i / (chartData.length - 1)) * 260 + 10;
-            const y = 80 - ((s.weight - minW) / range) * 60 + 10;
-            return `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent)" stroke="var(--bg-secondary)" stroke-width="2"/>`;
-          }).join('')}
+          ${coords.map(c =>
+            `<circle cx="${c.x}" cy="${c.y}" r="4" fill="var(--accent)" stroke="var(--bg-secondary)" stroke-width="2"/>`
+          ).join('')}
         </svg>
         <div class="weight-chart-labels">
-          <span class="text-sm text-muted">${maxW} ${unit}</span>
-          <span class="text-sm text-muted">${minW} ${unit}</span>
+          <span class="text-sm text-muted">${maxW} ${escapedUnit}</span>
+          <span class="text-sm text-muted">${minW} ${escapedUnit}</span>
         </div>
       </div>
     `;
@@ -78,7 +87,7 @@ function render(container, unit) {
       <p class="weight-log-title">Log Weight</p>
       <div class="weight-input-row">
         <div class="weight-input-group">
-          <label class="input-label" for="weight-input">Weight (${escapeHtml(unit)})</label>
+          <label class="input-label" for="weight-input">Weight (${escapedUnit})</label>
           <input type="number" class="input" id="weight-input" placeholder="0" inputmode="decimal" step="0.1" min="0">
         </div>
       </div>
@@ -99,11 +108,11 @@ function render(container, unit) {
       <div class="weight-current card">
         <div class="weight-current-info">
           <span class="text-sm text-muted">Current Weight</span>
-          <span class="weight-current-value">${latest.weight} ${latest.unit || unit}</span>
+          <span class="weight-current-value">${latest.weight} ${escapedUnit}</span>
           ${trendHtml}
         </div>
         <div class="weight-current-date text-sm text-muted">
-          ${formatStatDate(latest.date)}${latest.time ? ' at ' + latest.time : ''}
+          ${formatDate(latest.date)}${latest.time ? ' at ' + latest.time : ''}
         </div>
       </div>
     ` : ''}
@@ -116,11 +125,11 @@ function render(container, unit) {
         ${stats.map(s => `
           <div class="weight-history-item" data-date="${escapeHtml(s.date)}">
             <div class="weight-history-info">
-              <span class="weight-history-date">${formatStatDate(s.date)}</span>
+              <span class="weight-history-date">${formatDate(s.date)}</span>
               <span class="weight-history-time text-sm text-muted">${s.time || ''}</span>
             </div>
             <div class="weight-history-right">
-              <span class="weight-history-value">${s.weight} ${s.unit || unit}</span>
+              <span class="weight-history-value">${s.weight} ${escapedUnit}</span>
               <button class="weight-delete-btn" data-date="${escapeHtml(s.date)}" aria-label="Delete entry">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -150,7 +159,7 @@ function render(container, unit) {
     const date = dateInput.value;
     const time = timeInput.value;
 
-    if (!weight || weight <= 0) {
+    if (isNaN(weight) || weight <= 0) {
       showToast('Please enter a valid weight', 'error');
       weightInput.focus();
       return;
@@ -165,55 +174,35 @@ function render(container, unit) {
     render(container, unit);
   });
 
-  // Delete entries
-  container.querySelectorAll('.weight-delete-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const date = btn.dataset.date;
-      const close = showModal(`
-        <div class="modal-header">
-          <h3 class="modal-title">Delete Entry?</h3>
-          <button class="modal-close" id="del-cancel">&times;</button>
-        </div>
-        <p class="text-muted mb-16">Remove the weight entry for ${formatStatDate(date)}?</p>
-        <div class="flex gap-8">
-          <button class="btn btn-danger btn-block" id="del-confirm">Delete</button>
-          <button class="btn btn-secondary btn-block" id="del-cancel2">Cancel</button>
-        </div>
-      `);
+  // Delete entries (event delegation)
+  container.querySelector('.weight-history-list')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.weight-delete-btn');
+    if (!btn) return;
+    e.stopPropagation();
+    const date = btn.dataset.date;
+    const overlay = document.getElementById('modal-overlay');
+    const close = showModal(`
+      <div class="modal-header">
+        <h3 class="modal-title">Delete Entry?</h3>
+        <button class="modal-close" id="del-cancel">&times;</button>
+      </div>
+      <p class="text-muted mb-16">Remove the weight entry for ${formatDate(date)}?</p>
+      <div class="flex gap-8">
+        <button class="btn btn-danger btn-block" id="del-confirm">Delete</button>
+        <button class="btn btn-secondary btn-block" id="del-cancel2">Cancel</button>
+      </div>
+    `);
 
-      setTimeout(() => {
-        document.querySelector('#del-confirm')?.addEventListener('click', () => {
-          store.deleteBodyStat(date);
-          close();
-          showToast('Entry deleted');
-          render(container, unit);
-        });
-        document.querySelector('#del-cancel')?.addEventListener('click', close);
-        document.querySelector('#del-cancel2')?.addEventListener('click', close);
-      }, 50);
+    overlay.querySelector('#del-confirm')?.addEventListener('click', () => {
+      store.deleteBodyStat(date);
+      close();
+      showToast('Entry deleted');
+      render(container, unit);
     });
+    overlay.querySelector('#del-cancel')?.addEventListener('click', close);
+    overlay.querySelector('#del-cancel2')?.addEventListener('click', close);
   });
 
   // Auto-focus weight input
   container.querySelector('#weight-input')?.focus();
-}
-
-function formatStatDate(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00');
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-
-  const todayStr = today.toISOString().split('T')[0];
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-  if (dateStr === todayStr) return 'Today';
-  if (dateStr === yesterdayStr) return 'Yesterday';
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
 }

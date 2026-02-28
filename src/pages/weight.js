@@ -1,5 +1,5 @@
 import { store } from '../store.js';
-import { showToast, showModal, escapeHtml, formatDate, todayStr } from '../utils.js';
+import { showToast, showModal, escapeHtml, formatDate, todayStr, parseDecimal } from '../utils.js';
 
 export function weightPage(container) {
   const settings = store.getSettings();
@@ -88,7 +88,7 @@ function render(container, unit) {
       <div class="weight-input-row">
         <div class="weight-input-group">
           <label class="input-label" for="weight-input">Weight (${escapedUnit})</label>
-          <input type="number" class="input" id="weight-input" placeholder="0" inputmode="decimal" step="0.1" min="0">
+          <input type="text" class="input" id="weight-input" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
         </div>
       </div>
       <div class="weight-input-row">
@@ -155,7 +155,7 @@ function render(container, unit) {
     const weightInput = container.querySelector('#weight-input');
     const dateInput = container.querySelector('#weight-date');
     const timeInput = container.querySelector('#weight-time');
-    const weight = parseFloat(weightInput.value);
+    const weight = parseDecimal(weightInput.value);
     const date = dateInput.value;
     const time = timeInput.value;
 

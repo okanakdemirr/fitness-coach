@@ -118,11 +118,40 @@ export const store = {
 
   saveCustomExercise(exercise) {
     const exercises = this.getCustomExercises();
-    const exists = exercises.some(e => e.name.toLowerCase() === exercise.name.toLowerCase());
-    if (!exists) {
-      exercises.push(exercise);
-      this.set('customExercises', exercises);
+    const existing = exercises.find(e => e.name.toLowerCase() === exercise.name.toLowerCase());
+    if (existing) {
+      return { saved: false, existing };
     }
+    exercises.push(exercise);
+    this.set('customExercises', exercises);
+    return { saved: true };
+  },
+
+  updateCustomExercise(exercise) {
+    const exercises = this.getCustomExercises();
+    const idx = exercises.findIndex(e => e.name.toLowerCase() === exercise.name.toLowerCase());
+    if (idx >= 0) {
+      exercises[idx] = { ...exercises[idx], ...exercise };
+    } else {
+      exercises.push(exercise);
+    }
+    this.set('customExercises', exercises);
+    this.propagateExerciseCategory(exercise.name, exercise.category);
+  },
+
+  propagateExerciseCategory(name, category) {
+    const workouts = this.getWorkouts();
+    const nameLower = name.toLowerCase();
+    let changed = false;
+    for (const w of workouts) {
+      for (const ex of (w.exercises || [])) {
+        if (ex.name.toLowerCase() === nameLower && ex.category !== category) {
+          ex.category = category;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.set('workouts', workouts);
   },
 
   deleteCustomExercise(name) {

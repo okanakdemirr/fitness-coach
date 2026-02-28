@@ -208,6 +208,12 @@ export async function releaseWakeLock() {
   }
 }
 
+// Parse decimal values that may use comma as separator (locale support)
+export function parseDecimal(value) {
+  if (typeof value !== 'string') value = String(value ?? '');
+  return parseFloat(value.replace(',', '.'));
+}
+
 // Category icons/colors
 export const categoryConfig = {
   chest: { emoji: '🫁', color: '#ff6b6b' },

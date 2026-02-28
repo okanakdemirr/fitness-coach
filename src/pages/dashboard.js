@@ -101,13 +101,13 @@ export function dashboardPage(container) {
         </div>
         <span class="quick-action-label">History</span>
       </a>
-      <a href="#/tools" class="quick-action">
+      <a href="#/weight" class="quick-action">
         <div class="quick-action-icon" style="background: rgba(165,94,234,0.15)">
           <svg viewBox="0 0 24 24" fill="none" stroke="#a55eea" stroke-width="2">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            <path d="M12 3v18M3 12h18M7 8l5-5 5 5M7 16l5 5 5-5"/>
           </svg>
         </div>
-        <span class="quick-action-label">Tools</span>
+        <span class="quick-action-label">Weight</span>
       </a>
     </div>
 

@@ -89,6 +89,11 @@ export const store = {
     this.set('bodyStats', stats);
   },
 
+  deleteBodyStat(date) {
+    const stats = this.getBodyStats().filter(s => s.date !== date);
+    this.set('bodyStats', stats);
+  },
+
   // Settings
   getSettings() {
     return this.get('settings', {

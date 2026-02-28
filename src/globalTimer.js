@@ -65,6 +65,12 @@ function playCountdownTick() {
   playTone(880, 0.15, 0.25);
 }
 
+function maybePlayTick(prev, current) {
+  if (current !== prev && current > 0 && (current <= 5 || current === 10)) {
+    playCountdownTick();
+  }
+}
+
 function playWarningBeep() {
   if (!isSoundEnabled()) return;
   playTone(1200, 0.3, 0.25, 'triangle');
@@ -263,28 +269,25 @@ export const globalTimer = {
     _tickRefTimeLeft = timeLeft;
     timerInterval = setInterval(() => {
       if (!isRunning) return;
-      this._syncTime();
-      this._notify();
+      if (this._syncTime()) this._notify();
     }, 1000);
   },
 
   // Internal: recalculate timeLeft from wall clock to survive background throttling
+  // Returns true if state changed, false otherwise
   _syncTime() {
+    if (_tickRefTime === 0) return false;
     const elapsed = Math.floor((Date.now() - _tickRefTime) / 1000);
-    if (elapsed <= 0) return;
+    if (elapsed <= 0) return false;
 
     if (timerMode !== 'interval') {
       const prev = timeLeft;
       timeLeft = Math.max(0, _tickRefTimeLeft - elapsed);
-      // Sound cue for the current second only
-      if (timeLeft !== prev && timeLeft > 0) {
-        if (timeLeft <= 5) playCountdownTick();
-        else if (timeLeft === 10) playCountdownTick();
-      }
+      maybePlayTick(prev, timeLeft);
       if (timeLeft <= 0) {
         this._finish();
       }
-      return;
+      return timeLeft !== prev;
     }
 
     // Interval mode: may need to advance through multiple phases
@@ -292,28 +295,27 @@ export const globalTimer = {
     if (remaining > 0) {
       const prev = timeLeft;
       timeLeft = remaining;
-      if (timeLeft !== prev && timeLeft > 0) {
-        if (timeLeft <= 5) playCountdownTick();
-        else if (timeLeft === 10) playCountdownTick();
-      }
-    } else {
-      // Phase(s) completed while backgrounded — step through them
-      let overflow = -remaining;
-      this._advanceIntervalPhase();
-      if (!isRunning) return;
-      while (overflow > 0 && isRunning && timeLeft > 0) {
-        if (overflow >= timeLeft) {
-          overflow -= timeLeft;
-          this._advanceIntervalPhase();
-          if (!isRunning) return;
-        } else {
-          timeLeft -= overflow;
-          overflow = 0;
-        }
-      }
-      _tickRefTime = Date.now();
-      _tickRefTimeLeft = timeLeft;
+      maybePlayTick(prev, timeLeft);
+      return timeLeft !== prev;
     }
+
+    // Phase(s) completed while backgrounded — step through them
+    let overflow = -remaining;
+    this._advanceIntervalPhase();
+    if (!isRunning) return true;
+    while (overflow > 0 && isRunning && timeLeft > 0) {
+      if (overflow >= timeLeft) {
+        overflow -= timeLeft;
+        this._advanceIntervalPhase();
+        if (!isRunning) return true;
+      } else {
+        timeLeft -= overflow;
+        overflow = 0;
+      }
+    }
+    _tickRefTime = Date.now();
+    _tickRefTimeLeft = timeLeft;
+    return true;
   },
 
   // Internal: timer completed (non-interval)
@@ -326,7 +328,7 @@ export const globalTimer = {
     releaseWakeLock();
     playFinishSound();
     showToast('Timer complete!');
-    // _notify is called by the tick loop after this returns
+    // _notify is called by the caller after this returns
   },
 
   // Internal: advance to the next interval phase
@@ -374,7 +376,6 @@ export const globalTimer = {
 // Sync timer immediately when the tab becomes visible again
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && isRunning) {
-    globalTimer._syncTime();
-    globalTimer._notify();
+    if (globalTimer._syncTime()) globalTimer._notify();
   }
 });

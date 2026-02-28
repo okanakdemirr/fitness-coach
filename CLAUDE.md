@@ -37,8 +37,9 @@ src/
   utils.js                  # Shared helpers (toasts, modals, audio, wake lock)
   globalTimer.js             # Global timer state
   floatingTimer.js           # Floating timer widget
+  muscleMap.js               # SVG muscle map visualization (front/back body views)
   data/
-    exercises.js             # Built-in exercise database (56 exercises, 8 categories)
+    exercises.js             # Built-in exercise database (59 exercises, 8 categories)
   pages/
     dashboard.js             # Home — stats overview, quick actions
     workout.js               # Workout session management
@@ -46,6 +47,7 @@ src/
     history.js               # Workout history + calendar heatmap
     stats.js                 # Analytics and charts
     tools.js                 # Fitness calculators + stopwatch
+    weight.js                # Body weight tracking + chart
     settings.js              # App configuration + data management
   styles/
     main.css                 # CSS variables, layout, reset

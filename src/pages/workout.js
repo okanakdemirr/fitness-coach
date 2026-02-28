@@ -359,15 +359,36 @@ function showCategoryPicker(exIdx, container, settings) {
       store.setActiveWorkout(activeWorkout);
 
       // Propagate to custom exercise definition and all historical workouts
-      const customExercises = store.getCustomExercises();
-      if (customExercises.some(e => e.name.toLowerCase() === exerciseName.toLowerCase())) {
-        store.updateCustomExercise({ name: exerciseName, category: newCategory });
-      }
+      store.updateCustomExercise({ name: exerciseName, category: newCategory });
 
       renderExercises(container, settings);
       close();
       showToast(`Target group changed to ${newCategory}`);
     }
+  });
+}
+
+function showDuplicateExerciseConfirm(name, existingCategory, newCategory, onConfirm) {
+  const confirmEl = document.createElement('div');
+  confirmEl.innerHTML = `
+    <div class="modal-header">
+      <h3 class="modal-title">Exercise Exists</h3>
+      <button class="modal-close" id="dup-cancel">&times;</button>
+    </div>
+    <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existingCategory)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(newCategory)}</strong>"?</p>
+    <div class="flex gap-8">
+      <button class="btn btn-primary btn-block" id="dup-update">Update</button>
+      <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
+    </div>
+  `;
+  const closeConfirm = showModal(confirmEl);
+  confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
+  confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
+  confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
+    store.updateCustomExercise({ name, category: newCategory });
+    onConfirm();
+    closeConfirm();
+    showToast(`${name} updated`);
   });
 }
 
@@ -496,28 +517,9 @@ function showExercisePicker(container, settings) {
           addExerciseToWorkout(name, customCategory, container, settings);
           close();
         } else {
-          const existing = result.existing;
           close();
-          const confirmEl = document.createElement('div');
-          confirmEl.innerHTML = `
-            <div class="modal-header">
-              <h3 class="modal-title">Exercise Exists</h3>
-              <button class="modal-close" id="dup-cancel">&times;</button>
-            </div>
-            <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existing.category)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(customCategory)}</strong>"?</p>
-            <div class="flex gap-8">
-              <button class="btn btn-primary btn-block" id="dup-update">Update</button>
-              <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
-            </div>
-          `;
-          const closeConfirm = showModal(confirmEl);
-          confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
-          confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
-          confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
-            store.updateCustomExercise({ name, category: customCategory });
+          showDuplicateExerciseConfirm(name, result.existing.category, customCategory, () => {
             addExerciseToWorkout(name, customCategory, container, settings);
-            closeConfirm();
-            showToast(`${name} updated`);
           });
         }
       }
@@ -838,29 +840,10 @@ function showTemplateExercisePicker(templateExercises, onDone) {
           onDone();
           showToast(`${name} added`);
         } else {
-          const existing = result.existing;
           close();
-          const confirmEl = document.createElement('div');
-          confirmEl.innerHTML = `
-            <div class="modal-header">
-              <h3 class="modal-title">Exercise Exists</h3>
-              <button class="modal-close" id="dup-cancel">&times;</button>
-            </div>
-            <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existing.category)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(customCategory)}</strong>"?</p>
-            <div class="flex gap-8">
-              <button class="btn btn-primary btn-block" id="dup-update">Update</button>
-              <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
-            </div>
-          `;
-          const closeConfirm = showModal(confirmEl);
-          confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
-          confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
-          confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
-            store.updateCustomExercise({ name, category: customCategory });
+          showDuplicateExerciseConfirm(name, result.existing.category, customCategory, () => {
             templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
-            closeConfirm();
             onDone();
-            showToast(`${name} updated`);
           });
         }
       }

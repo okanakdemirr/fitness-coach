@@ -141,10 +141,11 @@ export const store = {
 
   propagateExerciseCategory(name, category) {
     const workouts = this.getWorkouts();
+    const nameLower = name.toLowerCase();
     let changed = false;
     for (const w of workouts) {
       for (const ex of (w.exercises || [])) {
-        if (ex.name.toLowerCase() === name.toLowerCase() && ex.category !== category) {
+        if (ex.name.toLowerCase() === nameLower && ex.category !== category) {
           ex.category = category;
           changed = true;
         }

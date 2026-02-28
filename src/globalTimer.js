@@ -17,6 +17,10 @@ let timerLabel = '';
 let intervalConfig = { workTime: 30, restTime: 15, rounds: 8, prepareTime: 5 };
 let intervalState = { round: 0, phase: 'prepare', totalRounds: 8 };
 
+// Wall-clock reference for accurate timing when background-throttled
+let _tickRefTime = 0;
+let _tickRefTimeLeft = 0;
+
 // Listeners: any part of the app can subscribe to timer ticks
 const listeners = new Set();
 
@@ -226,6 +230,10 @@ export const globalTimer = {
     if (!this.isActive) return;
     timeLeft = Math.max(0, timeLeft + seconds);
     totalTime = Math.max(totalTime, timeLeft);
+    if (isRunning) {
+      _tickRefTime = Date.now();
+      _tickRefTimeLeft = timeLeft;
+    }
     this._notify();
   },
 
@@ -251,27 +259,61 @@ export const globalTimer = {
   // Internal: start the 1-second tick loop
   _startTick() {
     clearInterval(timerInterval);
+    _tickRefTime = Date.now();
+    _tickRefTimeLeft = timeLeft;
     timerInterval = setInterval(() => {
       if (!isRunning) return;
-      timeLeft--;
-
-      // Sound cues — tick every second for the last 5 seconds
-      if (timeLeft <= 5 && timeLeft > 0) {
-        playCountdownTick();
-      } else if (timeLeft === 10) {
-        playCountdownTick();
-      }
-
-      if (timeLeft <= 0) {
-        if (timerMode === 'interval') {
-          this._advanceIntervalPhase();
-        } else {
-          this._finish();
-        }
-      }
-
+      this._syncTime();
       this._notify();
     }, 1000);
+  },
+
+  // Internal: recalculate timeLeft from wall clock to survive background throttling
+  _syncTime() {
+    const elapsed = Math.floor((Date.now() - _tickRefTime) / 1000);
+    if (elapsed <= 0) return;
+
+    if (timerMode !== 'interval') {
+      const prev = timeLeft;
+      timeLeft = Math.max(0, _tickRefTimeLeft - elapsed);
+      // Sound cue for the current second only
+      if (timeLeft !== prev && timeLeft > 0) {
+        if (timeLeft <= 5) playCountdownTick();
+        else if (timeLeft === 10) playCountdownTick();
+      }
+      if (timeLeft <= 0) {
+        this._finish();
+      }
+      return;
+    }
+
+    // Interval mode: may need to advance through multiple phases
+    const remaining = _tickRefTimeLeft - elapsed;
+    if (remaining > 0) {
+      const prev = timeLeft;
+      timeLeft = remaining;
+      if (timeLeft !== prev && timeLeft > 0) {
+        if (timeLeft <= 5) playCountdownTick();
+        else if (timeLeft === 10) playCountdownTick();
+      }
+    } else {
+      // Phase(s) completed while backgrounded — step through them
+      let overflow = -remaining;
+      this._advanceIntervalPhase();
+      if (!isRunning) return;
+      while (overflow > 0 && isRunning && timeLeft > 0) {
+        if (overflow >= timeLeft) {
+          overflow -= timeLeft;
+          this._advanceIntervalPhase();
+          if (!isRunning) return;
+        } else {
+          timeLeft -= overflow;
+          overflow = 0;
+        }
+      }
+      _tickRefTime = Date.now();
+      _tickRefTimeLeft = timeLeft;
+    }
   },
 
   // Internal: timer completed (non-interval)
@@ -328,3 +370,11 @@ export const globalTimer = {
     // _notify is called by the tick loop after this returns
   }
 };
+
+// Sync timer immediately when the tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && isRunning) {
+    globalTimer._syncTime();
+    globalTimer._notify();
+  }
+});

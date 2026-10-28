@@ -9,6 +9,9 @@ export const exercises = [
   { name: 'Push-Up', category: 'chest' },
   { name: 'Chest Dip', category: 'chest' },
   { name: 'Dumbbell Press', category: 'chest' },
+  { name: 'Incline Dumbbell Press', category: 'chest' },
+  { name: 'Pec Deck', category: 'chest' },
+  { name: 'Machine Chest Press', category: 'chest' },
 
   // Back
   { name: 'Deadlift', category: 'back' },
@@ -19,6 +22,10 @@ export const exercises = [
   { name: 'Seated Row', category: 'back' },
   { name: 'T-Bar Row', category: 'back' },
   { name: 'Face Pull', category: 'back' },
+  { name: 'Dumbbell Row', category: 'back' },
+  { name: 'Cable Row', category: 'back' },
+  { name: 'Straight-Arm Pulldown', category: 'back' },
+  { name: 'Back Extension', category: 'back' },
 
   // Legs
   { name: 'Squat', category: 'legs' },
@@ -31,6 +38,11 @@ export const exercises = [
   { name: 'Calf Raise', category: 'legs' },
   { name: 'Hip Thrust', category: 'legs' },
   { name: 'Lunges', category: 'legs' },
+  { name: 'Goblet Squat', category: 'legs' },
+  { name: 'Hack Squat', category: 'legs' },
+  { name: 'Glute Bridge', category: 'legs' },
+  { name: 'Step-Up', category: 'legs' },
+  { name: 'Seated Calf Raise', category: 'legs' },
 
   // Shoulders
   { name: 'Overhead Press', category: 'shoulders' },
@@ -41,6 +53,8 @@ export const exercises = [
   { name: 'Arnold Press', category: 'shoulders' },
   { name: 'Upright Row', category: 'shoulders' },
   { name: 'Shrugs', category: 'shoulders' },
+  { name: 'Cable Lateral Raise', category: 'shoulders' },
+  { name: 'Machine Shoulder Press', category: 'shoulders' },
 
   // Arms
   { name: 'Barbell Curl', category: 'arms' },
@@ -52,6 +66,10 @@ export const exercises = [
   { name: 'Overhead Tricep Extension', category: 'arms' },
   { name: 'Close-Grip Bench Press', category: 'arms' },
   { name: 'Dips', category: 'arms' },
+  { name: 'EZ-Bar Curl', category: 'arms' },
+  { name: 'Cable Curl', category: 'arms' },
+  { name: 'Rope Pushdown', category: 'arms' },
+  { name: 'Wrist Curl', category: 'arms' },
 
   // Core
   { name: 'Plank', category: 'core' },
@@ -62,6 +80,8 @@ export const exercises = [
   { name: 'Cable Crunch', category: 'core' },
   { name: 'Hanging Leg Raise', category: 'core' },
   { name: 'Mountain Climbers', category: 'core' },
+  { name: 'Side Plank', category: 'core' },
+  { name: 'Dead Bug', category: 'core' },
 
   // Cardio
   { name: 'Running', category: 'cardio' },
@@ -71,7 +91,9 @@ export const exercises = [
   { name: 'Burpees', category: 'cardio' },
   { name: 'Stair Climber', category: 'cardio' },
   { name: 'Elliptical', category: 'cardio' },
-  { name: 'Swimming', category: 'cardio' }
+  { name: 'Swimming', category: 'cardio' },
+  { name: 'Walking', category: 'cardio' },
+  { name: 'Kettlebell Swing', category: 'cardio' }
 ];
 
 export const categories = [

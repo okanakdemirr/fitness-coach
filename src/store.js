@@ -2,6 +2,21 @@
 
 const PREFIX = 'fitcoach_';
 
+export const DEFAULT_SETTINGS = {
+  theme: 'dark', // 'dark' | 'light' | 'system'
+  weightUnit: 'kg',
+  defaultRestTime: 90,
+  autoRestTimer: true,
+  soundEnabled: true,
+  vibrationEnabled: true,
+  weeklyGoal: 4
+};
+
+const LBS_PER_KG = 2.20462;
+
+// Round to 0.1 so unit conversions don't leave float noise behind
+const round1 = (n) => Math.round(n * 10) / 10;
+
 export const store = {
   get(key, defaultValue = null) {
     try {
@@ -15,8 +30,10 @@ export const store = {
   set(key, value) {
     try {
       localStorage.setItem(PREFIX + key, JSON.stringify(value));
+      return true;
     } catch (e) {
       console.warn('Storage write failed:', e);
+      return false;
     }
   },
 
@@ -26,7 +43,8 @@ export const store = {
 
   // Workout operations
   getWorkouts() {
-    return this.get('workouts', []);
+    const workouts = this.get('workouts', []);
+    return Array.isArray(workouts) ? workouts : [];
   },
 
   saveWorkout(workout) {
@@ -35,8 +53,13 @@ export const store = {
     if (idx >= 0) {
       workouts[idx] = workout;
     } else {
-      workouts.unshift(workout);
+      workouts.push(workout);
     }
+    // Newest first; ties broken by start time
+    workouts.sort((a, b) =>
+      (b.date || '').localeCompare(a.date || '') ||
+      (b.startTime || '').localeCompare(a.startTime || '')
+    );
     this.set('workouts', workouts);
   },
 
@@ -45,14 +68,10 @@ export const store = {
     this.set('workouts', workouts);
   },
 
-  getTodayWorkout() {
-    const today = new Date().toISOString().split('T')[0];
-    return this.getWorkouts().find(w => w.date === today) || null;
-  },
-
   // Template operations
   getTemplates() {
-    return this.get('templates', []);
+    const templates = this.get('templates', []);
+    return Array.isArray(templates) ? templates : [];
   },
 
   saveTemplate(template) {
@@ -73,17 +92,18 @@ export const store = {
 
   // Body stats operations
   getBodyStats() {
-    return this.get('bodyStats', []);
+    const stats = this.get('bodyStats', []);
+    return Array.isArray(stats) ? stats : [];
   },
 
   addBodyStat(entry) {
     const stats = this.getBodyStats();
-    // Replace if same date exists
+    // One entry per day: replace if same date exists
     const idx = stats.findIndex(s => s.date === entry.date);
     if (idx >= 0) {
       stats[idx] = entry;
     } else {
-      stats.unshift(entry);
+      stats.push(entry);
     }
     stats.sort((a, b) => b.date.localeCompare(a.date));
     this.set('bodyStats', stats);
@@ -94,15 +114,11 @@ export const store = {
     this.set('bodyStats', stats);
   },
 
-  // Settings
+  // Settings — always merged over defaults so older/imported settings
+  // objects missing newer keys still behave
   getSettings() {
-    return this.get('settings', {
-      theme: 'dark',
-      weightUnit: 'kg',
-      defaultRestTime: 90,
-      soundEnabled: true,
-      weeklyGoal: 4
-    });
+    const saved = this.get('settings', {});
+    return { ...DEFAULT_SETTINGS, ...(saved && typeof saved === 'object' ? saved : {}) };
   },
 
   updateSettings(updates) {
@@ -113,7 +129,8 @@ export const store = {
 
   // Custom exercises
   getCustomExercises() {
-    return this.get('customExercises', []);
+    const exercises = this.get('customExercises', []);
+    return Array.isArray(exercises) ? exercises : [];
   },
 
   saveCustomExercise(exercise) {
@@ -172,5 +189,104 @@ export const store = {
 
   clearActiveWorkout() {
     this.remove('activeWorkout');
+  },
+
+  // Convert every stored weight between kg and lbs
+  convertAllWeights(from, to) {
+    if (from === to) return;
+    const factor = to === 'lbs' ? LBS_PER_KG : 1 / LBS_PER_KG;
+    const convertSets = (exercises) => {
+      for (const ex of (exercises || [])) {
+        for (const s of (ex.sets || [])) {
+          if (s.weight) s.weight = round1(s.weight * factor);
+        }
+      }
+    };
+
+    const workouts = this.getWorkouts();
+    workouts.forEach(w => convertSets(w.exercises));
+    this.set('workouts', workouts);
+
+    const active = this.getActiveWorkout();
+    if (active) {
+      convertSets(active.exercises);
+      this.setActiveWorkout(active);
+    }
+
+    const stats = this.getBodyStats().map(s => {
+      const unit = s.unit || from;
+      if (unit === to) return s;
+      return { ...s, weight: round1(s.weight * factor), unit: to };
+    });
+    this.set('bodyStats', stats);
+  },
+
+  // Backup / restore
+  exportData() {
+    return {
+      app: 'fitcoach',
+      version: 2,
+      exportDate: new Date().toISOString(),
+      workouts: this.getWorkouts(),
+      templates: this.getTemplates(),
+      bodyStats: this.getBodyStats(),
+      customExercises: this.getCustomExercises(),
+      settings: this.getSettings()
+    };
+  },
+
+  // Returns a summary of what was imported, or throws on invalid data
+  importData(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new Error('Invalid backup file');
+    }
+    const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+    const summary = {};
+
+    if (Array.isArray(data.workouts)) {
+      const workouts = data.workouts
+        .filter(w => isObj(w) && typeof w.date === 'string' && Array.isArray(w.exercises))
+        .slice(0, 10000);
+      this.set('workouts', workouts);
+      summary.workouts = workouts.length;
+    }
+    if (Array.isArray(data.templates)) {
+      const templates = data.templates
+        .filter(t => isObj(t) && typeof t.name === 'string' && Array.isArray(t.exercises))
+        .slice(0, 500);
+      this.set('templates', templates);
+      summary.templates = templates.length;
+    }
+    if (Array.isArray(data.bodyStats)) {
+      const stats = data.bodyStats
+        .filter(s => isObj(s) && typeof s.date === 'string' && Number.isFinite(s.weight))
+        .slice(0, 5000);
+      this.set('bodyStats', stats);
+      summary.bodyStats = stats.length;
+    }
+    if (Array.isArray(data.customExercises)) {
+      const custom = data.customExercises
+        .filter(e => isObj(e) && typeof e.name === 'string' && typeof e.category === 'string')
+        .slice(0, 1000);
+      this.set('customExercises', custom);
+    }
+    if (isObj(data.settings)) {
+      const allowed = Object.keys(DEFAULT_SETTINGS);
+      const clean = {};
+      for (const k of allowed) if (k in data.settings) clean[k] = data.settings[k];
+      this.set('settings', { ...this.getSettings(), ...clean });
+    }
+    if (Object.keys(summary).length === 0) {
+      throw new Error('No FitCoach data found in file');
+    }
+    return summary;
+  },
+
+  clearAll() {
+    this.set('workouts', []);
+    this.set('templates', []);
+    this.set('bodyStats', []);
+    this.set('customExercises', []);
+    this.clearActiveWorkout();
   }
 };

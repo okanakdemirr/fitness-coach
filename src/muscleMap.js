@@ -1,5 +1,5 @@
 import { store } from './store.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, todayStr, toDateStr, addDays } from './utils.js';
 
 // Map exercise categories to muscle zone IDs
 const CATEGORY_MUSCLES = {
@@ -94,18 +94,9 @@ function computeActivation(workouts) {
 function getWorkoutsForPeriod(period) {
   const workouts = store.getWorkouts();
   const active = store.getActiveWorkout();
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
-
-  const filtered = workouts.filter(w => {
-    if (!w.date) return false;
-    switch (period) {
-      case 'today': return w.date === todayStr;
-      case 'week': return (now - new Date(w.date + 'T00:00:00')) < 7 * 86400000;
-      case 'month': return (now - new Date(w.date + 'T00:00:00')) < 30 * 86400000;
-      default: return false;
-    }
-  });
+  const days = { today: 1, week: 7, month: 30 }[period] || 7;
+  const since = days === 1 ? todayStr() : toDateStr(addDays(new Date(), -(days - 1)));
+  const filtered = workouts.filter(w => w.date && w.date >= since);
 
   if (active) {
     filtered.push(active);
@@ -193,15 +184,15 @@ export function renderMuscleMap(container) {
     }
 
     container.innerHTML = `
-      <div class="muscle-map-card">
+      <div class="card muscle-map-card">
         <div class="muscle-map-header">
-          <span class="section-title" style="margin:0">Muscle Map</span>
+          <span class="card-title">Muscle map</span>
           <span class="muscle-map-count">${activatedGroups.size} groups hit</span>
         </div>
-        <div class="muscle-map-tabs">
-          <button class="muscle-tab ${currentPeriod === 'today' ? 'active' : ''}" data-period="today">Today</button>
-          <button class="muscle-tab ${currentPeriod === 'week' ? 'active' : ''}" data-period="week">Week</button>
-          <button class="muscle-tab ${currentPeriod === 'month' ? 'active' : ''}" data-period="month">Month</button>
+        <div class="segmented sm mb-16" role="tablist" aria-label="Muscle map period">
+          ${[['today', 'Today'], ['week', '7 days'], ['month', '30 days']].map(([id, label]) => `
+            <button class="segment muscle-tab ${currentPeriod === id ? 'active' : ''}" data-period="${id}" role="tab" aria-selected="${currentPeriod === id}">${label}</button>
+          `).join('')}
         </div>
         <div class="muscle-map-body">
           <div class="muscle-map-view">
@@ -293,7 +284,7 @@ export function renderMuscleMap(container) {
             <div class="muscle-detail-content">
               <div class="muscle-detail-header">
                 <span class="muscle-detail-name">${label}</span>
-                <span class="muscle-detail-sets">${totalSets} sets</span>
+                <span class="muscle-detail-sets">${totalSets} set${totalSets !== 1 ? 's' : ''}</span>
               </div>
               <div class="muscle-detail-exercises">${exercises.map(e => escapeHtml(e)).join(' &middot; ')}</div>
             </div>

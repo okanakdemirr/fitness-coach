@@ -1,552 +1,447 @@
 import { store } from '../store.js';
-import { showModal, showToast, parseDecimal } from '../utils.js';
+import { showModal, parseDecimal, formatNumber, escapeHtml } from '../utils.js';
+import { showExerciseProgress } from '../exerciseProgress.js';
+
+const TOOLS = [
+  {
+    id: 'plates', name: 'Plate Calculator', desc: 'What to load on each side', tone: 'var(--accent-ink)',
+    icon: '<rect x="3" y="7" width="3" height="10" rx="1"/><rect x="6" y="5" width="3" height="14" rx="1"/><path d="M9 12h6"/><rect x="15" y="5" width="3" height="14" rx="1"/><rect x="18" y="7" width="3" height="10" rx="1"/>'
+  },
+  {
+    id: '1rm', name: '1RM Calculator', desc: 'Estimate your one-rep max', tone: 'var(--accent-secondary)',
+    icon: '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>'
+  },
+  {
+    id: 'progress', name: 'Exercise Progress', desc: 'Charts for every lift', tone: '#4cc9f0',
+    icon: '<polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/>'
+  },
+  {
+    id: 'weight', name: 'Body Weight', desc: 'Log and chart your weight', tone: '#b18cff',
+    icon: '<path d="M5 7h14l-1.5 13h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/>'
+  },
+  {
+    id: 'rm-table', name: 'Percentage Table', desc: 'Working weights from a 1RM', tone: 'var(--danger)',
+    icon: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>'
+  },
+  {
+    id: 'bmi', name: 'BMI Calculator', desc: 'Body mass index', tone: 'var(--warning)',
+    icon: '<circle cx="12" cy="7" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>'
+  },
+  {
+    id: 'stopwatch', name: 'Stopwatch', desc: 'Count up with laps', tone: '#ff8f5a',
+    icon: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M9 2h6M12 2v3"/>'
+  }
+];
 
 export function toolsPage(container) {
-  const settings = store.getSettings();
-  const unit = settings.weightUnit || 'kg';
+  const unit = store.getSettings().weightUnit;
 
   container.innerHTML = `
-    <p class="page-title">Tools</p>
-
+    <header class="page-header"><h1 class="page-title">Tools</h1></header>
     <div class="tools-grid">
-      <div class="tool-card" id="tool-1rm">
-        <div class="tool-icon" style="background: var(--accent-dim); color: var(--accent)">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 20V10M12 20V4M6 20v-6"/>
-          </svg>
-        </div>
-        <div class="tool-name">1RM Calculator</div>
-        <div class="tool-desc">Estimate your one-rep max</div>
-      </div>
-
-      <div class="tool-card" id="tool-bmi">
-        <div class="tool-icon" style="background: rgba(165,94,234,0.15); color: #a55eea">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4"/>
-            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-          </svg>
-        </div>
-        <div class="tool-name">BMI Calculator</div>
-        <div class="tool-desc">Body mass index</div>
-      </div>
-
-      <div class="tool-card" id="tool-rm-table">
-        <div class="tool-icon" style="background: var(--danger-dim); color: var(--danger)">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <line x1="3" y1="9" x2="21" y2="9"/>
-            <line x1="3" y1="15" x2="21" y2="15"/>
-            <line x1="9" y1="3" x2="9" y2="21"/>
-          </svg>
-        </div>
-        <div class="tool-name">RM Table</div>
-        <div class="tool-desc">Rep max percentages</div>
-      </div>
-
-      <div class="tool-card" id="tool-progress">
-        <div class="tool-icon" style="background: rgba(102,126,234,0.15); color: var(--accent-secondary)">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-          </svg>
-        </div>
-        <div class="tool-name">Exercise Progress</div>
-        <div class="tool-desc">Track per-exercise history</div>
-      </div>
-
-      <div class="tool-card" id="tool-stopwatch">
-        <div class="tool-icon" style="background: rgba(0,212,170,0.15); color: var(--accent)">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="13" r="9"/>
-            <polyline points="12 9 12 13 16 13"/>
-            <path d="M9 2h6M12 2v2"/>
-          </svg>
-        </div>
-        <div class="tool-name">Stopwatch</div>
-        <div class="tool-desc">Count up timer with laps</div>
-      </div>
-
-      <div class="tool-card" id="tool-weight">
-        <div class="tool-icon" style="background: rgba(255,159,67,0.15); color: #ff9f43">
-          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3a4 4 0 0 0-4 4c0 1.5.8 2.8 2 3.4V21h4V10.4c1.2-.6 2-1.9 2-3.4a4 4 0 0 0-4-4z"/>
-          </svg>
-        </div>
-        <div class="tool-name">Log Weight</div>
-        <div class="tool-desc">Track body weight</div>
-      </div>
+      ${TOOLS.map(t => `
+        <button class="tool-card" data-tool="${t.id}">
+          <span class="tool-icon" style="--tone:${t.tone}" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+          </span>
+          <span class="tool-name">${t.name}</span>
+          <span class="tool-desc">${t.desc}</span>
+        </button>
+      `).join('')}
     </div>
   `;
 
-  container.querySelector('#tool-1rm').addEventListener('click', () => show1RMCalculator(unit));
-  container.querySelector('#tool-bmi').addEventListener('click', () => showBMICalculator(unit));
-  container.querySelector('#tool-rm-table').addEventListener('click', () => showRMTable(unit));
-  container.querySelector('#tool-progress').addEventListener('click', () => showExerciseProgress(unit));
-  container.querySelector('#tool-stopwatch').addEventListener('click', () => showStopwatch());
-  container.querySelector('#tool-weight').addEventListener('click', () => { window.location.hash = '#/weight'; });
+  const actions = {
+    plates: () => showPlateCalculator(unit),
+    '1rm': () => show1RMCalculator(unit),
+    progress: () => showExerciseProgress(),
+    weight: () => { window.location.hash = '#/weight'; },
+    'rm-table': () => showRMTable(unit),
+    bmi: () => showBMICalculator(unit),
+    stopwatch: () => showStopwatch()
+  };
+
+  container.querySelectorAll('[data-tool]').forEach(btn => {
+    btn.addEventListener('click', () => actions[btn.dataset.tool]());
+  });
+}
+
+function sheetHeader(title) {
+  return `
+    <div class="modal-header">
+      <h3 class="modal-title">${title}</h3>
+      <button class="modal-close" data-close aria-label="Close">&times;</button>
+    </div>
+  `;
+}
+
+function numberField(id, label, placeholder, mode = 'decimal') {
+  return `
+    <div class="input-group">
+      <label class="input-label" for="${id}">${label}</label>
+      <input type="text" class="input input-lg" id="${id}" placeholder="${placeholder}" inputmode="${mode}" autocomplete="off">
+    </div>
+  `;
+}
+
+// ===== PLATE CALCULATOR =====
+const PLATES = {
+  kg: [25, 20, 15, 10, 5, 2.5, 1.25],
+  lbs: [45, 35, 25, 10, 5, 2.5]
+};
+const BARS = { kg: [20, 15, 10], lbs: [45, 35, 15] };
+// Standard competition colours, heaviest first
+const PLATE_COLORS = ['#ff5d6c', '#4c8dff', '#ffc94d', '#36d399', '#e9ebf0', '#9aa0ad', '#6e7381'];
+
+function showPlateCalculator(unit) {
+  const plates = PLATES[unit] || PLATES.kg;
+  const bars = BARS[unit] || BARS.kg;
+  let bar = bars[0];
+  const el = document.createElement('div');
+  el.innerHTML = `
+    ${sheetHeader('Plate Calculator')}
+    ${numberField('plate-target', `Target weight (${escapeHtml(unit)})`, unit === 'kg' ? 'e.g. 100' : 'e.g. 225')}
+    <div class="input-group">
+      <span class="input-label">Bar weight</span>
+      <div class="chip-group">
+        ${bars.map(b => `<button class="chip ${b === bar ? 'active' : ''}" data-bar="${b}">${b} ${escapeHtml(unit)}</button>`).join('')}
+      </div>
+    </div>
+    <div id="plate-result" class="tool-result"></div>
+  `;
+  showModal(el);
+
+  const input = el.querySelector('#plate-target');
+  const result = el.querySelector('#plate-result');
+
+  function calc() {
+    const target = parseDecimal(input.value);
+    if (!target) {
+      result.innerHTML = '<p class="tool-hint">Enter the total weight you want on the bar.</p>';
+      return;
+    }
+    if (target < bar) {
+      result.innerHTML = `<p class="tool-hint">That's lighter than the bar (${bar} ${escapeHtml(unit)}).</p>`;
+      return;
+    }
+    let perSide = (target - bar) / 2;
+    const loaded = [];
+    for (const p of plates) {
+      while (perSide >= p - 1e-9) {
+        loaded.push(p);
+        perSide -= p;
+      }
+    }
+    const achieved = target - perSide * 2;
+    const counts = loaded.reduce((m, p) => { m[p] = (m[p] || 0) + 1; return m; }, {});
+
+    result.innerHTML = `
+      <div class="barbell" aria-hidden="true">
+        <span class="barbell-sleeve"></span>
+        ${loaded.slice().reverse().map(p => plateEl(p, plates)).join('')}
+        <span class="barbell-bar"></span>
+        ${loaded.map(p => plateEl(p, plates)).join('')}
+        <span class="barbell-sleeve"></span>
+      </div>
+      ${loaded.length ? `
+        <p class="section-title text-center">Each side</p>
+        <div class="plate-counts">
+          ${Object.entries(counts).sort((a, b) => b[0] - a[0]).map(([p, n]) => `
+            <span class="plate-count"><b>${n}×</b> ${formatNumber(+p, 2)} ${escapeHtml(unit)}</span>
+          `).join('')}
+        </div>
+      ` : '<p class="tool-hint">Just the empty bar.</p>'}
+      ${perSide > 1e-9 ? `<p class="tool-warning">Closest possible: ${formatNumber(achieved, 2)} ${escapeHtml(unit)} (${formatNumber(perSide * 2, 2)} short)</p>` : ''}
+    `;
+  }
+
+  function plateEl(p, all) {
+    // lbs sets have no 25kg-equivalent red plate, so shift their colours by one
+    const rank = all.indexOf(p);
+    const color = PLATE_COLORS[rank + (all === PLATES.lbs ? 1 : 0)] || '#9aa0ad';
+    return `<span class="plate" style="height:${100 - rank * 11}%;background:${color}" title="${p}"></span>`;
+  }
+
+  input.addEventListener('input', calc);
+  el.querySelectorAll('[data-bar]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar = +btn.dataset.bar;
+      el.querySelectorAll('[data-bar]').forEach(b => b.classList.toggle('active', b === btn));
+      calc();
+    });
+  });
+  calc();
 }
 
 // ===== 1RM CALCULATOR =====
+const PERCENTAGES = [
+  { pct: 95, reps: '2' }, { pct: 90, reps: '3–4' }, { pct: 85, reps: '5–6' }, { pct: 80, reps: '7–8' },
+  { pct: 75, reps: '9–10' }, { pct: 70, reps: '11–12' }, { pct: 65, reps: '13–15' }, { pct: 60, reps: '16–20' }
+];
+
 function show1RMCalculator(unit) {
   const el = document.createElement('div');
-
   el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">1RM Calculator</h3>
-      <button class="modal-close" id="close-1rm">&times;</button>
+    ${sheetHeader('1RM Calculator')}
+    <p class="modal-text">Enter a set you completed to estimate your one-rep max.</p>
+    <div class="field-row">
+      ${numberField('orm-weight', `Weight (${escapeHtml(unit)})`, '80')}
+      ${numberField('orm-reps', 'Reps', '5', 'numeric')}
     </div>
-    <p class="text-muted text-sm mb-16">Estimate your one-rep max from a set you completed.</p>
-    <div class="input-group">
-      <label class="input-label">Weight lifted (${unit})</label>
-      <input type="text" class="input" id="orm-weight" placeholder="e.g. 80" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
-    </div>
-    <div class="input-group">
-      <label class="input-label">Reps completed</label>
-      <input type="number" class="input" id="orm-reps" placeholder="e.g. 5" min="1" max="30" inputmode="numeric">
-    </div>
-    <button class="btn btn-primary btn-block mb-16" id="calc-1rm">Calculate</button>
-    <div id="orm-results"></div>
+    <div id="orm-results" class="tool-result"></div>
   `;
+  showModal(el);
 
-  const close = showModal(el);
+  const w = el.querySelector('#orm-weight');
+  const r = el.querySelector('#orm-reps');
+  const out = el.querySelector('#orm-results');
 
-  setTimeout(() => {
-    el.querySelector('#close-1rm')?.addEventListener('click', close);
-    el.querySelector('#calc-1rm')?.addEventListener('click', () => {
-      const weight = parseDecimal(el.querySelector('#orm-weight').value);
-      const reps = parseInt(el.querySelector('#orm-reps').value);
+  function calc() {
+    const weight = parseDecimal(w.value);
+    const reps = parseInt(r.value, 10);
+    if (!weight || !reps || reps < 1) {
+      out.innerHTML = '<p class="tool-hint">Results update as you type.</p>';
+      return;
+    }
+    if (reps > 15) {
+      out.innerHTML = '<p class="tool-warning">Estimates get unreliable above ~12 reps. Try a heavier set.</p>';
+      return;
+    }
+    const epley = reps === 1 ? weight : weight * (1 + reps / 30);
+    const brzycki = reps === 1 ? weight : weight * (36 / (37 - reps));
+    const lander = reps === 1 ? weight : (100 * weight) / (101.3 - 2.67123 * reps);
+    const avg = (epley + brzycki + lander) / 3;
 
-      if (!weight || !reps || reps < 1) {
-        showToast('Enter weight and reps', 'error');
-        return;
-      }
-
-      if (reps === 1) {
-        el.querySelector('#orm-results').innerHTML = `
-          <div class="card text-center">
-            <div class="stat-value">${weight} ${unit}</div>
-            <div class="stat-label">Your 1RM (actual)</div>
+    out.innerHTML = `
+      <div class="result-hero">
+        <span class="result-value">${formatNumber(avg, 1)}<small> ${escapeHtml(unit)}</small></span>
+        <span class="result-label">Estimated 1RM</span>
+      </div>
+      <div class="formula-row">
+        <span>Epley <b>${formatNumber(epley, 1)}</b></span>
+        <span>Brzycki <b>${formatNumber(brzycki, 1)}</b></span>
+        <span>Lander <b>${formatNumber(lander, 1)}</b></span>
+      </div>
+      <div class="pct-table">
+        ${PERCENTAGES.map(p => `
+          <div class="pct-row">
+            <span class="pct-pct">${p.pct}%</span>
+            <span class="pct-reps">${p.reps} reps</span>
+            <span class="pct-weight">${formatNumber(avg * p.pct / 100, 1)} ${escapeHtml(unit)}</span>
           </div>
-        `;
-        return;
-      }
+        `).join('')}
+      </div>
+    `;
+  }
+  w.addEventListener('input', calc);
+  r.addEventListener('input', calc);
+  calc();
+}
 
-      const epley = weight * (1 + reps / 30);
-      const brzycki = weight * (36 / (37 - reps));
-      const lander = (100 * weight) / (101.3 - 2.67123 * reps);
-      const avg = (epley + brzycki + lander) / 3;
+// ===== PERCENTAGE TABLE =====
+function showRMTable(unit) {
+  const rows = [
+    { pct: 100, reps: '1', zone: 'Max strength' },
+    { pct: 95, reps: '2', zone: 'Max strength' },
+    { pct: 90, reps: '3–4', zone: 'Strength' },
+    { pct: 85, reps: '5–6', zone: 'Strength' },
+    { pct: 80, reps: '7–8', zone: 'Hypertrophy' },
+    { pct: 75, reps: '8–10', zone: 'Hypertrophy' },
+    { pct: 70, reps: '10–12', zone: 'Hypertrophy' },
+    { pct: 65, reps: '12–15', zone: 'Endurance' },
+    { pct: 60, reps: '15–20', zone: 'Endurance' },
+    { pct: 50, reps: '20+', zone: 'Endurance' }
+  ];
+  const zoneTone = {
+    'Max strength': 'var(--danger)',
+    Strength: 'var(--warning)',
+    Hypertrophy: 'var(--accent-ink)',
+    Endurance: 'var(--accent-secondary)'
+  };
 
-      el.querySelector('#orm-results').innerHTML = `
-        <div class="card mb-12 text-center">
-          <div class="stat-value">${Math.round(avg)} ${unit}</div>
-          <div class="stat-label">Estimated 1RM (average)</div>
-        </div>
-        <div class="text-sm text-muted mb-8">
-          <div class="flex justify-between" style="padding:4px 0"><span>Epley formula</span><span class="font-bold">${Math.round(epley)} ${unit}</span></div>
-          <div class="flex justify-between" style="padding:4px 0"><span>Brzycki formula</span><span class="font-bold">${Math.round(brzycki)} ${unit}</span></div>
-          <div class="flex justify-between" style="padding:4px 0"><span>Lander formula</span><span class="font-bold">${Math.round(lander)} ${unit}</span></div>
-        </div>
-        <div class="divider"></div>
-        <p class="section-title mt-8">Training Percentages</p>
-        <div class="text-sm">
-          ${[
-            { pct: 95, label: '2 reps' },
-            { pct: 90, label: '3-4 reps' },
-            { pct: 85, label: '5-6 reps' },
-            { pct: 80, label: '7-8 reps' },
-            { pct: 75, label: '8-10 reps' },
-            { pct: 70, label: '10-12 reps' },
-            { pct: 65, label: '12-15 reps' },
-            { pct: 60, label: '15-20 reps' },
-          ].map(r => `
-            <div class="flex justify-between" style="padding:4px 0">
-              <span>${r.pct}% <span class="text-muted">(${r.label})</span></span>
-              <span class="font-bold text-accent">${Math.round(avg * r.pct / 100)} ${unit}</span>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    });
-  }, 100);
+  const el = document.createElement('div');
+  el.innerHTML = `
+    ${sheetHeader('Percentage Table')}
+    ${numberField('rm-1rm', `Your 1RM (${escapeHtml(unit)})`, '100')}
+    <div id="rm-results" class="tool-result"></div>
+  `;
+  showModal(el);
+
+  const input = el.querySelector('#rm-1rm');
+  const out = el.querySelector('#rm-results');
+  function calc() {
+    const orm = parseDecimal(input.value);
+    if (!orm) {
+      out.innerHTML = '<p class="tool-hint">Don\'t know your 1RM? Use the 1RM Calculator first.</p>';
+      return;
+    }
+    out.innerHTML = `
+      <div class="pct-table">
+        ${rows.map(r => `
+          <div class="pct-row">
+            <span class="pct-pct">${r.pct}%</span>
+            <span class="pct-reps">${r.reps} reps <em style="color:${zoneTone[r.zone]}">${r.zone}</em></span>
+            <span class="pct-weight">${formatNumber(orm * r.pct / 100, 1)} ${escapeHtml(unit)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+  input.addEventListener('input', calc);
+  calc();
 }
 
 // ===== BMI CALCULATOR =====
 function showBMICalculator(unit) {
+  const latest = store.getBodyStats()[0];
   const el = document.createElement('div');
-
   el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">BMI Calculator</h3>
-      <button class="modal-close" id="close-bmi">&times;</button>
+    ${sheetHeader('BMI Calculator')}
+    <div class="field-row">
+      ${numberField('bmi-weight', `Weight (${escapeHtml(unit)})`, unit === 'kg' ? '75' : '165')}
+      ${numberField('bmi-height', 'Height (cm)', '175', 'numeric')}
     </div>
-    <div class="input-group">
-      <label class="input-label">Weight (${unit})</label>
-      <input type="text" class="input" id="bmi-weight" placeholder="e.g. 75" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
-    </div>
-    <div class="input-group">
-      <label class="input-label">Height (cm)</label>
-      <input type="number" class="input" id="bmi-height" placeholder="e.g. 175" inputmode="numeric">
-    </div>
-    <button class="btn btn-primary btn-block mb-16" id="calc-bmi">Calculate</button>
-    <div id="bmi-results"></div>
+    <div id="bmi-results" class="tool-result"></div>
   `;
+  showModal(el);
 
-  const close = showModal(el);
+  const wIn = el.querySelector('#bmi-weight');
+  const hIn = el.querySelector('#bmi-height');
+  const out = el.querySelector('#bmi-results');
+  if (latest) wIn.value = latest.weight;
+  const savedHeight = localStorage.getItem('fitcoach_height');
+  if (savedHeight) hIn.value = savedHeight;
 
-  setTimeout(() => {
-    el.querySelector('#close-bmi')?.addEventListener('click', close);
-    el.querySelector('#calc-bmi')?.addEventListener('click', () => {
-      let weight = parseDecimal(el.querySelector('#bmi-weight').value);
-      const heightCm = parseFloat(el.querySelector('#bmi-height').value);
+  function calc() {
+    let weight = parseDecimal(wIn.value);
+    const heightCm = parseDecimal(hIn.value);
+    if (!weight || !heightCm || heightCm < 50) {
+      out.innerHTML = '<p class="tool-hint">Results update as you type.</p>';
+      return;
+    }
+    localStorage.setItem('fitcoach_height', String(heightCm));
+    if (unit === 'lbs') weight *= 0.453592;
+    const bmi = weight / ((heightCm / 100) ** 2);
 
-      if (!weight || !heightCm) {
-        showToast('Enter weight and height', 'error');
-        return;
-      }
+    let category, tone;
+    if (bmi < 18.5) { category = 'Underweight'; tone = 'var(--warning)'; }
+    else if (bmi < 25) { category = 'Healthy weight'; tone = 'var(--success)'; }
+    else if (bmi < 30) { category = 'Overweight'; tone = 'var(--warning)'; }
+    else { category = 'Obese'; tone = 'var(--danger)'; }
 
-      // Convert lbs to kg if needed
-      if (unit === 'lbs') weight = weight * 0.453592;
-
-      const heightM = heightCm / 100;
-      const bmi = weight / (heightM * heightM);
-      const bmiRounded = Math.round(bmi * 10) / 10;
-
-      let category, color;
-      if (bmi < 18.5) { category = 'Underweight'; color = 'var(--warning)'; }
-      else if (bmi < 25) { category = 'Normal weight'; color = 'var(--accent)'; }
-      else if (bmi < 30) { category = 'Overweight'; color = 'var(--warning)'; }
-      else { category = 'Obese'; color = 'var(--danger)'; }
-
-      // BMI scale position (15-40 range)
-      const pct = Math.min(100, Math.max(0, ((bmi - 15) / 25) * 100));
-
-      el.querySelector('#bmi-results').innerHTML = `
-        <div class="card text-center">
-          <div class="stat-value" style="color:${color}">${bmiRounded}</div>
-          <div class="stat-label mb-16">${category}</div>
-          <div class="bmi-scale">
-            <div class="bmi-bar">
-              <div class="bmi-zone" style="background:#ffd93d;flex:0.14"></div>
-              <div class="bmi-zone" style="background:#00d4aa;flex:0.26"></div>
-              <div class="bmi-zone" style="background:#ffd93d;flex:0.2"></div>
-              <div class="bmi-zone" style="background:#ff6b6b;flex:0.4"></div>
-            </div>
-            <div class="bmi-marker" style="left:${pct}%"></div>
-            <div class="bmi-labels">
-              <span>15</span>
-              <span>18.5</span>
-              <span>25</span>
-              <span>30</span>
-              <span>40</span>
-            </div>
-          </div>
-          <p class="text-sm text-muted mt-16">BMI is a rough guide and doesn't account for muscle mass, bone density, or body composition.</p>
-        </div>
-      `;
-    });
-  }, 100);
-}
-
-// ===== RM TABLE =====
-function showRMTable(unit) {
-  const el = document.createElement('div');
-
-  el.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Rep Max Table</h3>
-      <button class="modal-close" id="close-rm">&times;</button>
-    </div>
-    <p class="text-muted text-sm mb-12">Enter your 1RM to see working weights.</p>
-    <div class="input-group">
-      <label class="input-label">1RM Weight (${unit})</label>
-      <input type="text" class="input" id="rm-1rm" placeholder="e.g. 100" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
-    </div>
-    <button class="btn btn-primary btn-block mb-16" id="calc-rm">Generate Table</button>
-    <div id="rm-results"></div>
-  `;
-
-  const close = showModal(el);
-
-  setTimeout(() => {
-    el.querySelector('#close-rm')?.addEventListener('click', close);
-    el.querySelector('#calc-rm')?.addEventListener('click', () => {
-      const orm = parseDecimal(el.querySelector('#rm-1rm').value);
-      if (!orm) { showToast('Enter your 1RM', 'error'); return; }
-
-      const rows = [
-        { pct: 100, reps: '1', zone: 'Max Strength' },
-        { pct: 95, reps: '2', zone: 'Max Strength' },
-        { pct: 90, reps: '3-4', zone: 'Strength' },
-        { pct: 85, reps: '5-6', zone: 'Strength' },
-        { pct: 80, reps: '7-8', zone: 'Hypertrophy' },
-        { pct: 75, reps: '8-10', zone: 'Hypertrophy' },
-        { pct: 70, reps: '10-12', zone: 'Hypertrophy' },
-        { pct: 65, reps: '12-15', zone: 'Endurance' },
-        { pct: 60, reps: '15-20', zone: 'Endurance' },
-        { pct: 55, reps: '20-25', zone: 'Endurance' },
-        { pct: 50, reps: '25+', zone: 'Endurance' },
-      ];
-
-      const zoneColors = {
-        'Max Strength': 'var(--danger)',
-        'Strength': 'var(--warning)',
-        'Hypertrophy': 'var(--accent)',
-        'Endurance': 'var(--accent-secondary)'
-      };
-
-      el.querySelector('#rm-results').innerHTML = `
-        <div class="rm-table">
-          <div class="rm-table-header">
-            <span>%</span><span>Weight</span><span>Reps</span><span>Zone</span>
-          </div>
-          ${rows.map(r => `
-            <div class="rm-table-row">
-              <span>${r.pct}%</span>
-              <span class="font-bold">${Math.round(orm * r.pct / 100)} ${unit}</span>
-              <span>${r.reps}</span>
-              <span style="color:${zoneColors[r.zone]};font-size:11px">${r.zone}</span>
-            </div>
-          `).join('')}
-        </div>
-      `;
-    });
-  }, 100);
-}
-
-// ===== EXERCISE PROGRESS =====
-function showExerciseProgress(unit) {
-  const workouts = store.getWorkouts();
-  const exerciseNames = new Set();
-  workouts.forEach(w => (w.exercises || []).forEach(e => exerciseNames.add(e.name)));
-  const names = [...exerciseNames].sort();
-
-  const el = document.createElement('div');
-
-  function render(selectedExercise = null) {
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Exercise Progress</h3>
-        <button class="modal-close" id="close-progress">&times;</button>
+    const pct = Math.min(100, Math.max(0, ((bmi - 15) / 25) * 100));
+    out.innerHTML = `
+      <div class="result-hero">
+        <span class="result-value" style="color:${tone}">${formatNumber(bmi, 1)}</span>
+        <span class="result-label">${category}</span>
       </div>
-      ${names.length === 0 ? `
-        <p class="text-muted text-center">No exercise data yet. Complete some workouts first!</p>
-      ` : `
-        <div class="input-group">
-          <label class="input-label">Select Exercise</label>
-          <select class="input" id="progress-exercise">
-            <option value="">Choose...</option>
-            ${names.map(n => `<option value="${n}" ${n === selectedExercise ? 'selected' : ''}>${n}</option>`).join('')}
-          </select>
+      <div class="bmi-scale">
+        <div class="bmi-bar">
+          <span style="flex:3.5;background:var(--warning)"></span>
+          <span style="flex:6.5;background:var(--success)"></span>
+          <span style="flex:5;background:var(--warning)"></span>
+          <span style="flex:10;background:var(--danger)"></span>
         </div>
-        <div id="progress-data"></div>
-      `}
+        <span class="bmi-marker" style="left:${pct}%"></span>
+        <div class="bmi-labels"><span>15</span><span>18.5</span><span>25</span><span>30</span><span>40</span></div>
+      </div>
+      <p class="tool-hint">BMI doesn't account for muscle mass — lifters often read “overweight” while lean.</p>
     `;
-
-    setTimeout(() => {
-      el.querySelector('#close-progress')?.addEventListener('click', close);
-      el.querySelector('#progress-exercise')?.addEventListener('change', (e) => {
-        if (e.target.value) renderExerciseData(el.querySelector('#progress-data'), e.target.value, workouts, unit);
-      });
-
-      if (selectedExercise) {
-        renderExerciseData(el.querySelector('#progress-data'), selectedExercise, workouts, unit);
-      }
-    }, 50);
   }
-
-  render();
-  const close = showModal(el);
-}
-
-function renderExerciseData(container, exerciseName, workouts, unit) {
-  // Collect all instances of this exercise across workouts
-  const history = [];
-  workouts.forEach(w => {
-    (w.exercises || []).forEach(ex => {
-      if (ex.name === exerciseName) {
-        const completedSets = (ex.sets || []).filter(s => s.completed);
-        if (completedSets.length > 0) {
-          const maxWeight = Math.max(...completedSets.map(s => s.weight || 0));
-          const totalVolume = completedSets.reduce((a, s) => a + (s.weight || 0) * (s.reps || 0), 0);
-          const maxReps = Math.max(...completedSets.map(s => s.reps || 0));
-          history.push({
-            date: w.date,
-            sets: completedSets,
-            maxWeight,
-            maxReps,
-            totalVolume,
-            numSets: completedSets.length
-          });
-        }
-      }
-    });
-  });
-
-  if (history.length === 0) {
-    container.innerHTML = '<p class="text-muted text-center mt-16">No completed sets found for this exercise.</p>';
-    return;
-  }
-
-  // Show in reverse chronological order
-  const sorted = history.sort((a, b) => b.date.localeCompare(a.date));
-  const allTimeMax = Math.max(...sorted.map(h => h.maxWeight));
-
-  // Progress chart (last 10 sessions, max weight)
-  const chartData = sorted.slice(0, 10).reverse();
-  const chartMax = Math.max(...chartData.map(d => d.maxWeight), 1);
-
-  container.innerHTML = `
-    <div class="stat-grid mt-16 mb-16">
-      <div class="stat-card">
-        <div class="stat-value">${allTimeMax}</div>
-        <div class="stat-label">Best (${unit})</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${sorted.length}</div>
-        <div class="stat-label">Sessions</div>
-      </div>
-    </div>
-
-    ${chartData.length >= 2 ? `
-      <p class="section-title">Weight Trend (last ${chartData.length})</p>
-      <div class="weekly-chart" style="height:100px">
-        ${chartData.map(d => `
-          <div class="weekly-bar">
-            <div class="weekly-bar-fill" style="height:${Math.max(6, (d.maxWeight / chartMax) * 70)}px"></div>
-            <span class="weekly-bar-label">${d.maxWeight}</span>
-          </div>
-        `).join('')}
-      </div>
-    ` : ''}
-
-    <p class="section-title">History</p>
-    <div style="max-height:250px;overflow-y:auto">
-      ${sorted.map(h => `
-        <div class="card mb-8" style="padding:12px">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-bold">${new Date(h.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-            <span class="badge badge-accent">${h.maxWeight} ${unit}</span>
-          </div>
-          <div class="text-sm text-muted">
-            ${h.numSets} sets · ${h.sets.map(s => `${s.weight}${unit}x${s.reps}`).join(', ')}
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+  wIn.addEventListener('input', calc);
+  hIn.addEventListener('input', calc);
+  calc();
 }
 
 // ===== STOPWATCH =====
 function showStopwatch() {
-  let interval = null;
+  let raf = null;
+  let startAt = 0;
   let elapsed = 0;
   let running = false;
   let laps = [];
-  let lastLapTime = 0;
 
   const el = document.createElement('div');
+  el.innerHTML = `
+    ${sheetHeader('Stopwatch')}
+    <div class="stopwatch-time tabular" id="sw-time">00:00.00</div>
+    <div class="timer-controls">
+      <button class="timer-control-btn secondary" id="sw-left" aria-label="Lap"></button>
+      <button class="timer-control-btn primary" id="sw-toggle" aria-label="Start"></button>
+    </div>
+    <div id="sw-laps"></div>
+  `;
 
-  function render() {
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Stopwatch</h3>
-        <button class="modal-close" id="close-sw">&times;</button>
-      </div>
-      <div class="text-center">
-        <div class="stopwatch-time" id="sw-time">${formatStopwatch(elapsed)}</div>
-        <div class="timer-controls" style="justify-content:center;margin:20px 0">
-          <button class="timer-control-btn reset" id="sw-lap" title="${elapsed === 0 ? 'Reset' : 'Lap'}">
-            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
-              ${elapsed === 0 && !running ? `
-                <path d="M3 12a9 9 0 1 1 9 9 9 9 0 0 1-6.36-2.64"/>
-                <path d="M3 3v9h9"/>
-              ` : `
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 6v6l4 2"/>
-              `}
-            </svg>
-          </button>
-          <button class="timer-control-btn ${running ? 'pause' : 'play'}" id="sw-toggle">
-            ${running ? `
-              <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-            ` : `
-              <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>
-            `}
-          </button>
-          ${!running && elapsed > 0 ? `
-            <button class="timer-control-btn stop" id="sw-reset" title="Reset">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-              </svg>
-            </button>
-          ` : ''}
-        </div>
-      </div>
-      ${laps.length > 0 ? `
-        <div class="divider"></div>
-        <p class="section-title">Laps</p>
-        <div style="max-height:200px;overflow-y:auto">
-          ${laps.map((lap, i) => `
-            <div class="flex justify-between text-sm" style="padding:6px 0;border-bottom:1px solid var(--border)">
-              <span class="text-muted">Lap ${laps.length - i}</span>
-              <span class="font-bold">${formatStopwatch(lap.split)}</span>
-              <span class="text-muted">${formatStopwatch(lap.total)}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-    `;
+  const timeEl = el.querySelector('#sw-time');
+  const leftBtn = el.querySelector('#sw-left');
+  const toggleBtn = el.querySelector('#sw-toggle');
+  const lapsEl = el.querySelector('#sw-laps');
 
-    setTimeout(bind, 30);
+  const now = () => elapsed + (running ? performance.now() - startAt : 0);
+
+  function tick() {
+    timeEl.textContent = formatStopwatch(now());
+    raf = requestAnimationFrame(tick);
   }
 
-  function bind() {
-    el.querySelector('#close-sw')?.addEventListener('click', () => {
-      clearInterval(interval);
-      close();
-    });
+  function renderButtons() {
+    toggleBtn.classList.toggle('paused-state', running);
+    toggleBtn.setAttribute('aria-label', running ? 'Pause' : 'Start');
+    toggleBtn.innerHTML = running
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.5"/><rect x="14" y="4" width="4" height="16" rx="1.5"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z"/></svg>';
+    leftBtn.textContent = running ? 'Lap' : 'Reset';
+    leftBtn.setAttribute('aria-label', running ? 'Lap' : 'Reset');
+    leftBtn.disabled = !running && now() === 0;
+  }
 
-    el.querySelector('#sw-toggle')?.addEventListener('click', () => {
-      if (running) {
-        clearInterval(interval);
-        running = false;
-      } else {
-        running = true;
-        const start = Date.now() - elapsed;
-        interval = setInterval(() => {
-          elapsed = Date.now() - start;
-          const timeEl = el.querySelector('#sw-time');
-          if (timeEl) timeEl.textContent = formatStopwatch(elapsed);
-        }, 50);
-      }
-      render();
-    });
+  function renderLaps() {
+    if (!laps.length) { lapsEl.innerHTML = ''; return; }
+    const splits = laps.map((t, i) => t - (laps[i + 1] || 0));
+    const best = Math.min(...splits);
+    const worst = Math.max(...splits);
+    lapsEl.innerHTML = `
+      <div class="lap-list">
+        ${laps.map((t, i) => `
+          <div class="lap-row ${laps.length > 1 && splits[i] === best ? 'best' : ''} ${laps.length > 1 && splits[i] === worst ? 'worst' : ''}">
+            <span>Lap ${laps.length - i}</span>
+            <span class="tabular">${formatStopwatch(splits[i])}</span>
+            <span class="tabular text-muted">${formatStopwatch(t)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
 
-    el.querySelector('#sw-lap')?.addEventListener('click', () => {
-      if (running) {
-        const split = elapsed - lastLapTime;
-        laps.unshift({ split, total: elapsed });
-        lastLapTime = elapsed;
-        render();
-      } else if (elapsed > 0) {
-        // Reset
-        elapsed = 0;
-        laps = [];
-        lastLapTime = 0;
-        render();
-      }
-    });
+  toggleBtn.addEventListener('click', () => {
+    if (running) {
+      elapsed = now();
+      running = false;
+      cancelAnimationFrame(raf);
+      timeEl.textContent = formatStopwatch(elapsed);
+    } else {
+      startAt = performance.now();
+      running = true;
+      tick();
+    }
+    renderButtons();
+  });
 
-    el.querySelector('#sw-reset')?.addEventListener('click', () => {
+  leftBtn.addEventListener('click', () => {
+    if (running) {
+      laps.unshift(now());
+    } else {
       elapsed = 0;
       laps = [];
-      lastLapTime = 0;
-      render();
-    });
-  }
+      timeEl.textContent = formatStopwatch(0);
+    }
+    renderLaps();
+    renderButtons();
+  });
 
-  render();
-  const close = showModal(el);
+  renderButtons();
+  // Stop the animation loop however the sheet gets closed
+  showModal(el, { onClose: () => cancelAnimationFrame(raf) });
 }
 
 function formatStopwatch(ms) {

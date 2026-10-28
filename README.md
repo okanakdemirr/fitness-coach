@@ -4,7 +4,7 @@ A progressive web app for tracking workouts, managing timers, and monitoring fit
 
 ## Features
 
-- **Workout Logging** - Create workouts, add exercises from a library of 59+ built-in exercises or add custom ones, track sets/reps/weight with auto rest timer
+- **Workout Logging** - Create workouts, add exercises from a library of 80+ built-in exercises or add custom ones, see your previous numbers for every set, auto rest timer, and personal-record detection
 - **Timer Modes** - Countdown, rest, and interval timers with presets (Tabata, HIIT, EMOM), audio cues, and screen wake lock
 - **History & Calendar** - View past workouts with a 12-week GitHub-style activity heatmap
 - **Stats & Analytics** - Day streaks, weekly volume, bar charts, personal records, top muscle groups, and interactive muscle map
@@ -52,7 +52,7 @@ fitness-coach/
     ├── floatingTimer.js        # Floating timer widget
     ├── muscleMap.js            # SVG muscle map visualization
     ├── data/
-    │   └── exercises.js        # Built-in exercise database (59 exercises, 8 categories)
+    │   └── exercises.js        # Built-in exercise database (81 exercises, 7 categories)
     ├── pages/
     │   ├── dashboard.js        # Home - stats overview, quick actions
     │   ├── workout.js          # Workout session management

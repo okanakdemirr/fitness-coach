@@ -1,13 +1,22 @@
 import { store } from '../store.js';
-import { exercises as exerciseDB, categories } from '../data/exercises.js';
-import { generateId, todayStr, showToast, showModal, formatTime, playBeep, playTripleBeep, escapeHtml, parseDecimal } from '../utils.js';
+import {
+  generateId, todayStr, showToast, showModal, formatTime, formatDurationMs, formatNumber,
+  formatVolume, escapeHtml, parseDecimal, confirmDialog, promptDialog, capitalize,
+  categoryColor, sounds, vibrate, formatDate, plural
+} from '../utils.js';
 import { globalTimer } from '../globalTimer.js';
+import { refreshFloatingTimer } from '../floatingTimer.js';
+import { openExercisePicker, categoryChips } from '../exercisePicker.js';
+import { showExerciseProgress } from '../exerciseProgress.js';
+import {
+  getLastPerformance, countCompletedSets, workoutVolume, findNewPRs, defaultWorkoutName
+} from '../analytics.js';
 
 let activeWorkout = null;
 let elapsedInterval = null;
-let startTimestamp = null;
-let restTimerInterval = null;
 let restTimerUnsubscribe = null;
+// Previous-session sets per exercise name, cached per render
+let previousCache = new Map();
 
 export function workoutPage(container) {
   activeWorkout = store.getActiveWorkout();
@@ -20,54 +29,97 @@ export function workoutPage(container) {
 
   return () => {
     clearInterval(elapsedInterval);
-    clearInterval(restTimerInterval);
     elapsedInterval = null;
-    restTimerInterval = null;
-    startTimestamp = null;
     dismissRestTimer();
   };
 }
 
+// Start a workout from anywhere (dashboard, history "repeat")
+export function startWorkoutFrom({ name, exercises, templateId }) {
+  const workouts = store.getWorkouts();
+  const built = exercises.map(ex => {
+    const prev = getLastPerformance(workouts, ex.name);
+    const count = ex.targetSets || ex.sets?.length || prev?.length || 3;
+    return {
+      name: ex.name,
+      category: ex.category,
+      sets: Array.from({ length: count }, (_, i) => ({
+        weight: 0,
+        reps: ex.targetReps || ex.sets?.[i]?.reps || 0,
+        completed: false
+      }))
+    };
+  });
+  startNewWorkout(built, name, templateId);
+}
+
+function saveActive() {
+  store.setActiveWorkout(activeWorkout);
+}
+
+// ===== START SCREEN =====
+
 function renderWorkoutStart(container) {
   const templates = store.getTemplates();
+  const workouts = store.getWorkouts();
+
+  const lastDone = (tpl) => {
+    const w = workouts.find(x => x.templateId === tpl.id);
+    if (!w) return 'Not done yet';
+    const d = formatDate(w.date);
+    return `Last done ${d === 'Today' || d === 'Yesterday' ? d.toLowerCase() : d}`;
+  };
 
   container.innerHTML = `
-    <p class="page-title">Start Workout</p>
+    <header class="page-header">
+      <h1 class="page-title">Workout</h1>
+    </header>
 
-    <div class="flex gap-8 mb-24">
-      <button class="btn btn-primary btn-lg btn-block" id="start-empty">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-        Start Workout
-      </button>
-      <button class="btn btn-secondary btn-lg" id="create-template" style="flex-shrink:0">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="3"/>
-          <path d="M9 12h6M12 9v6"/>
-        </svg>
-      </button>
+    <button class="start-card mb-24" id="start-empty">
+      <span class="start-card-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span class="start-card-text">
+        <span class="start-card-title">Start empty workout</span>
+        <span class="start-card-desc">Add exercises as you go</span>
+      </span>
+      <svg class="start-card-chevron" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+
+    <div class="section-header">
+      <h2 class="section-title">Templates</h2>
+      <button class="link-btn" id="create-template">+ New template</button>
     </div>
 
     ${templates.length > 0 ? `
-      <p class="section-title">Templates</p>
-      ${templates.map(t => `
-        <div class="template-card" data-template="${t.id}">
-          <div class="template-name">${escapeHtml(t.name)}</div>
-          <div class="template-exercises">${t.exercises.map(e => escapeHtml(e.name)).join(' · ')}</div>
-          <div class="template-actions">
-            <button class="btn btn-sm btn-primary start-template" data-id="${t.id}">Start</button>
-            <button class="btn btn-sm btn-danger delete-template" data-id="${t.id}">Delete</button>
+      <div class="template-list">
+        ${templates.map(t => `
+          <div class="template-card" data-template="${escapeHtml(t.id)}">
+            <div class="template-card-main">
+              <div class="template-name">${escapeHtml(t.name)}</div>
+              <div class="template-meta">${plural(t.exercises.length, 'exercise')} · ${escapeHtml(lastDone(t))}</div>
+              <div class="template-exercises">${t.exercises.map(e => escapeHtml(e.name)).join(' · ')}</div>
+            </div>
+            <div class="template-actions">
+              <button class="btn btn-primary btn-sm start-template" data-id="${escapeHtml(t.id)}">Start</button>
+              <button class="icon-btn edit-template" data-id="${escapeHtml(t.id)}" aria-label="Edit ${escapeHtml(t.name)}">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+              </button>
+              <button class="icon-btn danger delete-template" data-id="${escapeHtml(t.id)}" aria-label="Delete ${escapeHtml(t.name)}">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+              </button>
+            </div>
           </div>
-        </div>
-      `).join('')}
+        `).join('')}
+      </div>
     ` : `
-      <div class="empty-state">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="3" width="18" height="18" rx="3"/>
-          <path d="M9 12h6M12 9v6"/>
-        </svg>
-        <p>No templates yet.<br>Create one using the button above!</p>
+      <div class="empty-state compact">
+        <div class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        </div>
+        <p class="empty-title">No templates yet</p>
+        <p>Save routines like “Push Day” to start them in one tap.</p>
+        <button class="btn btn-secondary mt-16" id="create-template-empty">Create template</button>
       </div>
     `}
   `;
@@ -77,976 +129,852 @@ function renderWorkoutStart(container) {
     renderActiveWorkout(container);
   });
 
-  container.querySelector('#create-template').addEventListener('click', () => {
-    showTemplateCreator(container);
-  });
+  const openCreator = () => showTemplateEditor(container);
+  container.querySelector('#create-template').addEventListener('click', openCreator);
+  container.querySelector('#create-template-empty')?.addEventListener('click', openCreator);
 
   container.querySelectorAll('.start-template').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
+    btn.addEventListener('click', () => {
       const tpl = templates.find(t => t.id === btn.dataset.id);
-      if (tpl) {
-        const exercises = tpl.exercises.map(ex => ({
-          name: ex.name,
-          category: ex.category,
-          sets: Array.from({ length: ex.targetSets || 3 }, () => ({
-            reps: ex.targetReps || 10,
-            weight: 0,
-            completed: false
-          }))
-        }));
-        startNewWorkout(exercises);
-        renderActiveWorkout(container);
-      }
+      if (!tpl) return;
+      startWorkoutFrom({ name: tpl.name, exercises: tpl.exercises, templateId: tpl.id });
+      renderActiveWorkout(container);
+    });
+  });
+
+  container.querySelectorAll('.edit-template').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tpl = templates.find(t => t.id === btn.dataset.id);
+      if (tpl) showTemplateEditor(container, tpl);
     });
   });
 
   container.querySelectorAll('.delete-template').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      store.deleteTemplate(btn.dataset.id);
-      showToast('Template deleted');
+    btn.addEventListener('click', async () => {
+      const tpl = templates.find(t => t.id === btn.dataset.id);
+      if (!tpl) return;
+      const ok = await confirmDialog({
+        title: 'Delete template?',
+        message: `“${escapeHtml(tpl.name)}” will be deleted. Workouts you already logged are kept.`,
+        confirmText: 'Delete',
+        danger: true
+      });
+      if (!ok) return;
+      store.deleteTemplate(tpl.id);
       renderWorkoutStart(container);
+      showToast('Template deleted', 'success', {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            store.saveTemplate(tpl);
+            renderWorkoutStart(container);
+          }
+        }
+      });
     });
   });
 }
 
-function startNewWorkout(exercises) {
+function startNewWorkout(exercises, name, templateId) {
   activeWorkout = {
     id: generateId('w_'),
+    name: name || defaultWorkoutName(),
+    templateId: templateId || null,
     date: todayStr(),
     startTime: new Date().toISOString(),
     endTime: null,
-    exercises: exercises,
+    exercises,
     notes: ''
   };
-  store.setActiveWorkout(activeWorkout);
+  saveActive();
 }
 
+// ===== ACTIVE WORKOUT =====
+
 function renderActiveWorkout(container) {
-  startTimestamp = new Date(activeWorkout.startTime);
   const settings = store.getSettings();
+  const workouts = store.getWorkouts();
+  previousCache = new Map();
+  for (const ex of activeWorkout.exercises) {
+    previousCache.set(ex.name.toLowerCase(), getLastPerformance(workouts, ex.name));
+  }
 
   container.innerHTML = `
-    <div class="workout-active-header">
-      <div class="workout-timer-badge">
-        <span class="dot"></span>
-        <span id="elapsed-time">00:00</span>
+    <div class="workout-head">
+      <div class="workout-head-info">
+        <button class="workout-name" id="rename-workout" aria-label="Rename workout">
+          <span id="workout-name-text">${escapeHtml(activeWorkout.name || 'Workout')}</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
+        <div class="workout-meta">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span id="elapsed-time" class="tabular">00:00</span>
+          <span class="meta-sep">·</span>
+          <span id="set-progress"></span>
+        </div>
       </div>
-      <div class="flex gap-8">
-        <button class="btn btn-sm btn-secondary" id="btn-finish">Finish</button>
-        <button class="btn btn-sm btn-danger" id="btn-discard">Discard</button>
-      </div>
+      <button class="btn btn-primary" id="btn-finish">Finish</button>
     </div>
+    <div class="progress-bar mb-16" aria-hidden="true"><div class="progress-fill" id="workout-progress"></div></div>
 
     <div id="exercises-list"></div>
 
     <button class="add-exercise-btn" id="btn-add-exercise">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 5v14M5 12h14"/>
-      </svg>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
       Add Exercise
     </button>
 
-    <div class="mt-16">
-      <label class="input-label">Workout Notes</label>
-      <textarea class="input" id="workout-notes" rows="2" placeholder="How did it feel?">${activeWorkout.notes || ''}</textarea>
+    <div class="input-group mt-24">
+      <label class="input-label" for="workout-notes">Notes</label>
+      <textarea class="input" id="workout-notes" rows="2" placeholder="How did it feel? Anything to remember next time?">${escapeHtml(activeWorkout.notes || '')}</textarea>
     </div>
+
+    <button class="btn btn-ghost-danger btn-block" id="btn-discard">Discard workout</button>
   `;
 
   renderExercises(container, settings);
+  // Delegated once on the list container, which survives re-renders
+  bindExerciseEvents(container, container.querySelector('#exercises-list'), settings);
   startElapsedTimer(container);
 
   container.querySelector('#btn-add-exercise').addEventListener('click', () => {
-    showExercisePicker(container, settings);
+    openExercisePicker({
+      exclude: activeWorkout.exercises.map(e => e.name),
+      onPick: ({ name, category }) => addExerciseToWorkout(name, category, container, settings)
+    });
   });
 
-  container.querySelector('#btn-finish').addEventListener('click', () => {
-    finishWorkout(container);
+  container.querySelector('#rename-workout').addEventListener('click', async () => {
+    const name = await promptDialog({
+      title: 'Rename workout',
+      value: activeWorkout.name || '',
+      placeholder: 'e.g. Push Day'
+    });
+    if (!name) return;
+    activeWorkout.name = name;
+    saveActive();
+    container.querySelector('#workout-name-text').textContent = name;
   });
 
-  container.querySelector('#btn-discard').addEventListener('click', () => {
-    const close = showModal(`
-      <div class="modal-header">
-        <h3 class="modal-title">Discard Workout?</h3>
-        <button class="modal-close" id="modal-cancel">&times;</button>
-      </div>
-      <p class="text-muted mb-16">This will delete all progress for this workout.</p>
-      <div class="flex gap-8">
-        <button class="btn btn-danger btn-block" id="modal-confirm">Discard</button>
-        <button class="btn btn-secondary btn-block" id="modal-cancel2">Cancel</button>
-      </div>
-    `);
+  container.querySelector('#btn-finish').addEventListener('click', () => finishWorkout(container));
 
-    setTimeout(() => {
-      document.querySelector('#modal-confirm')?.addEventListener('click', () => {
-        store.clearActiveWorkout();
-        activeWorkout = null;
-        clearInterval(elapsedInterval);
-        close();
-        showToast('Workout discarded');
-        renderWorkoutStart(container);
-      });
-      document.querySelector('#modal-cancel')?.addEventListener('click', close);
-      document.querySelector('#modal-cancel2')?.addEventListener('click', close);
-    }, 50);
+  container.querySelector('#btn-discard').addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: 'Discard workout?',
+      message: 'All sets logged in this workout will be lost.',
+      confirmText: 'Discard',
+      danger: true
+    });
+    if (!ok) return;
+    discardActive();
+    showToast('Workout discarded');
+    renderWorkoutStart(container);
   });
 
   container.querySelector('#workout-notes').addEventListener('input', (e) => {
     activeWorkout.notes = e.target.value;
-    store.setActiveWorkout(activeWorkout);
+    saveActive();
   });
+}
+
+function discardActive() {
+  store.clearActiveWorkout();
+  activeWorkout = null;
+  clearInterval(elapsedInterval);
+  dismissRestTimer();
+  if (globalTimer.mode === 'rest') globalTimer.stop();
+}
+
+function formatPrev(set) {
+  if (!set) return '—';
+  if (set.weight) return `${formatNumber(set.weight)}×${set.reps || 0}`;
+  return set.reps ? `${set.reps} reps` : '—';
 }
 
 function renderExercises(container, settings) {
   const list = container.querySelector('#exercises-list');
   if (!list) return;
-  const unit = settings.weightUnit || 'kg';
+  const unit = settings.weightUnit;
 
-  list.innerHTML = activeWorkout.exercises.map((ex, exIdx) => `
-    <div class="exercise-block" data-exercise="${exIdx}">
+  if (activeWorkout.exercises.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state compact">
+        <div class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 6.5h11M6.5 17.5h11M6 12h12"/><rect x="2" y="5" width="4" height="14" rx="1.5"/><rect x="18" y="5" width="4" height="14" rx="1.5"/></svg>
+        </div>
+        <p class="empty-title">Let's get moving</p>
+        <p>Add your first exercise to start logging sets.</p>
+      </div>
+    `;
+    updateProgress(container);
+    return;
+  }
+
+  list.innerHTML = activeWorkout.exercises.map((ex, exIdx) => {
+    const prev = previousCache.get(ex.name.toLowerCase()) || null;
+    const done = ex.sets.filter(s => s.completed).length;
+    return `
+    <section class="exercise-block ${done === ex.sets.length && done > 0 ? 'all-done' : ''}" data-exercise="${exIdx}">
       <div class="exercise-block-header">
-        <div>
-          <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
-          <div class="exercise-block-category editable-category" data-ex="${exIdx}" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">${ex.category} <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+        <span class="cat-bar" style="background:${categoryColor(ex.category)}" aria-hidden="true"></span>
+        <div class="exercise-title-wrap">
+          <h3 class="exercise-block-name">${escapeHtml(ex.name)}</h3>
+          <span class="exercise-block-category">${escapeHtml(capitalize(ex.category))}</span>
         </div>
-        <button class="btn btn-sm btn-ghost remove-exercise" data-idx="${exIdx}">Remove</button>
+        <span class="exercise-done-count" data-count="${exIdx}">${done}/${ex.sets.length}</span>
+        <button class="icon-btn exercise-menu" data-ex="${exIdx}" aria-label="Options for ${escapeHtml(ex.name)}">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+        </button>
       </div>
-      <div class="exercise-block-body">
-        <div class="set-header">
-          <span>Set</span>
-          <span>${unit}</span>
-          <span>Reps</span>
-          <span></span>
+      <div class="set-table" role="table" aria-label="${escapeHtml(ex.name)} sets">
+        <div class="set-header" role="row">
+          <span role="columnheader">Set</span>
+          <span role="columnheader">Previous</span>
+          <span role="columnheader">${escapeHtml(unit)}</span>
+          <span role="columnheader">Reps</span>
+          <span role="columnheader"><span class="sr-only">Done</span>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
           <span></span>
         </div>
-        ${ex.sets.map((set, setIdx) => `
-          <div class="set-row">
+        ${ex.sets.map((set, setIdx) => {
+          const p = prev?.[setIdx] || null;
+          return `
+          <div class="set-row ${set.completed ? 'done' : ''}" role="row" data-row="${exIdx}-${setIdx}">
             <span class="set-number">${setIdx + 1}</span>
-            <input type="text" class="input set-weight" data-ex="${exIdx}" data-set="${setIdx}"
-              value="${set.weight || ''}" placeholder="0" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*">
-            <input type="number" class="input set-reps" data-ex="${exIdx}" data-set="${setIdx}"
-              value="${set.reps || ''}" placeholder="0" min="0" inputmode="numeric">
-            <button class="set-check ${set.completed ? 'checked' : ''}" data-ex="${exIdx}" data-set="${setIdx}">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
+            <button class="set-prev" data-ex="${exIdx}" data-set="${setIdx}" ${p ? '' : 'disabled'}
+              aria-label="${p ? `Use previous: ${formatPrev(p)}` : 'No previous set'}">${formatPrev(p)}</button>
+            <input type="text" class="input set-input set-weight" data-ex="${exIdx}" data-set="${setIdx}"
+              value="${set.weight || ''}" placeholder="${p?.weight ? formatNumber(p.weight) : '0'}"
+              inputmode="decimal" autocomplete="off" aria-label="Set ${setIdx + 1} weight">
+            <input type="text" class="input set-input set-reps" data-ex="${exIdx}" data-set="${setIdx}"
+              value="${set.reps || ''}" placeholder="${p?.reps || '0'}"
+              inputmode="numeric" autocomplete="off" aria-label="Set ${setIdx + 1} reps">
+            <button class="set-check ${set.completed ? 'checked' : ''}" data-ex="${exIdx}" data-set="${setIdx}"
+              aria-pressed="${set.completed}" aria-label="Mark set ${setIdx + 1} done">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </button>
-            <button class="remove-set" data-ex="${exIdx}" data-set="${setIdx}" title="Remove set">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
+            <button class="remove-set" data-ex="${exIdx}" data-set="${setIdx}" aria-label="Remove set ${setIdx + 1}">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
             </button>
-          </div>
-        `).join('')}
-        <button class="add-set-btn" data-ex="${exIdx}">+ Add Set</button>
+          </div>`;
+        }).join('')}
       </div>
-    </div>
-  `).join('');
+      <button class="add-set-btn" data-ex="${exIdx}">+ Add Set</button>
+    </section>
+  `;
+  }).join('');
 
-  // Bind events
-  list.querySelectorAll('.set-weight').forEach(input => {
-    input.addEventListener('change', (e) => {
-      const ex = parseInt(e.target.dataset.ex, 10);
-      const set = parseInt(e.target.dataset.set, 10);
-      let val = parseDecimal(e.target.value) || 0;
-      val = Math.max(0, Math.min(val, 9999));
-      e.target.value = val || '';
-      activeWorkout.exercises[ex].sets[set].weight = val;
-      store.setActiveWorkout(activeWorkout);
-    });
+  updateProgress(container);
+}
+
+function bindExerciseEvents(container, list, settings) {
+  const getIdx = (el) => [parseInt(el.dataset.ex, 10), parseInt(el.dataset.set, 10)];
+
+  // Save as the user types so nothing is lost if the app is closed
+  list.addEventListener('input', (e) => {
+    const input = e.target;
+    if (!input.classList.contains('set-input')) return;
+    const [ex, set] = getIdx(input);
+    const target = activeWorkout.exercises[ex]?.sets[set];
+    if (!target) return;
+    if (input.classList.contains('set-weight')) {
+      const val = parseDecimal(input.value);
+      target.weight = Number.isFinite(val) ? Math.max(0, Math.min(val, 9999)) : 0;
+    } else {
+      input.value = input.value.replace(/[^\d]/g, '');
+      target.reps = Math.max(0, Math.min(parseInt(input.value, 10) || 0, 9999));
+    }
+    saveActive();
   });
 
-  list.querySelectorAll('.set-reps').forEach(input => {
-    input.addEventListener('change', (e) => {
-      const ex = parseInt(e.target.dataset.ex, 10);
-      const set = parseInt(e.target.dataset.set, 10);
-      let val = parseInt(e.target.value, 10) || 0;
-      val = Math.max(0, Math.min(val, 9999));
-      e.target.value = val || '';
-      activeWorkout.exercises[ex].sets[set].reps = val;
-      store.setActiveWorkout(activeWorkout);
-    });
+  // Normalise the displayed value once editing is done
+  list.addEventListener('change', (e) => {
+    const input = e.target;
+    if (!input.classList.contains('set-input')) return;
+    const [ex, set] = getIdx(input);
+    const target = activeWorkout.exercises[ex]?.sets[set];
+    if (!target) return;
+    const val = input.classList.contains('set-weight') ? target.weight : target.reps;
+    input.value = val ? formatNumber(val, 2).replace(/,/g, '') : '';
   });
 
-  list.querySelectorAll('.set-check').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const ex = parseInt(btn.dataset.ex, 10);
-      const set = parseInt(btn.dataset.set, 10);
-      const wasCompleted = activeWorkout.exercises[ex].sets[set].completed;
-      activeWorkout.exercises[ex].sets[set].completed = !wasCompleted;
-      btn.classList.toggle('checked');
-      store.setActiveWorkout(activeWorkout);
-
-      // Auto-start rest timer when completing a set (not uncompleting)
-      if (!wasCompleted) {
-        const restTime = settings.defaultRestTime || 90;
-        showRestTimerPopup(restTime);
-      }
-    });
+  // Enter moves to the next field
+  list.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.classList.contains('set-input')) return;
+    e.preventDefault();
+    const inputs = [...list.querySelectorAll('.set-input')];
+    const next = inputs[inputs.indexOf(e.target) + 1];
+    if (next) next.focus();
+    else e.target.blur();
   });
 
-  list.querySelectorAll('.add-set-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const exIdx = parseInt(btn.dataset.ex, 10);
-      const lastSet = activeWorkout.exercises[exIdx].sets.at(-1);
-      activeWorkout.exercises[exIdx].sets.push({
-        reps: lastSet?.reps || 10,
-        weight: lastSet?.weight || 0,
-        completed: false
-      });
-      store.setActiveWorkout(activeWorkout);
+  list.addEventListener('click', (e) => {
+    const check = e.target.closest('.set-check');
+    if (check) {
+      toggleSet(container, settings, ...getIdx(check));
+      return;
+    }
+
+    const prevBtn = e.target.closest('.set-prev');
+    if (prevBtn) {
+      const [ex, set] = getIdx(prevBtn);
+      const exercise = activeWorkout.exercises[ex];
+      const p = previousCache.get(exercise.name.toLowerCase())?.[set];
+      if (!p) return;
+      exercise.sets[set].weight = p.weight || 0;
+      exercise.sets[set].reps = p.reps || 0;
+      saveActive();
+      const row = list.querySelector(`[data-row="${ex}-${set}"]`);
+      row.querySelector('.set-weight').value = p.weight ? formatNumber(p.weight, 2).replace(/,/g, '') : '';
+      row.querySelector('.set-reps').value = p.reps || '';
+      return;
+    }
+
+    const addSet = e.target.closest('.add-set-btn');
+    if (addSet) {
+      const exIdx = parseInt(addSet.dataset.ex, 10);
+      const sets = activeWorkout.exercises[exIdx].sets;
+      const last = sets.at(-1);
+      sets.push({ reps: last?.reps || 0, weight: last?.weight || 0, completed: false });
+      saveActive();
       renderExercises(container, settings);
-    });
-  });
+      return;
+    }
 
-  list.querySelectorAll('.remove-exercise').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.dataset.idx, 10);
-      activeWorkout.exercises.splice(idx, 1);
-      store.setActiveWorkout(activeWorkout);
-      renderExercises(container, settings);
-    });
-  });
-
-  list.querySelectorAll('.editable-category').forEach(el => {
-    el.addEventListener('click', () => {
-      const exIdx = parseInt(el.dataset.ex, 10);
-      showCategoryPicker(exIdx, container, settings);
-    });
-  });
-
-  list.querySelectorAll('.remove-set').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const exIdx = parseInt(btn.dataset.ex, 10);
-      const setIdx = parseInt(btn.dataset.set, 10);
+    const removeSet = e.target.closest('.remove-set');
+    if (removeSet) {
+      const [exIdx, setIdx] = getIdx(removeSet);
       const exercise = activeWorkout.exercises[exIdx];
       if (exercise.sets.length <= 1) {
-        showToast('Use "Remove" to delete the exercise');
+        removeExercise(container, settings, exIdx);
         return;
       }
       exercise.sets.splice(setIdx, 1);
-      store.setActiveWorkout(activeWorkout);
+      saveActive();
       renderExercises(container, settings);
-    });
+      return;
+    }
+
+    const menu = e.target.closest('.exercise-menu');
+    if (menu) {
+      showExerciseMenu(container, settings, parseInt(menu.dataset.ex, 10));
+    }
+  });
+}
+
+function toggleSet(container, settings, exIdx, setIdx) {
+  const exercise = activeWorkout.exercises[exIdx];
+  const set = exercise?.sets[setIdx];
+  if (!set) return;
+  const row = container.querySelector(`[data-row="${exIdx}-${setIdx}"]`);
+
+  if (!set.completed) {
+    // Fill empty fields from what the placeholders suggest (last session)
+    const p = previousCache.get(exercise.name.toLowerCase())?.[setIdx];
+    if (!set.weight && p?.weight) {
+      set.weight = p.weight;
+      row.querySelector('.set-weight').value = formatNumber(p.weight, 2).replace(/,/g, '');
+    }
+    if (!set.reps && p?.reps) {
+      set.reps = p.reps;
+      row.querySelector('.set-reps').value = p.reps;
+    }
+    if (!set.reps && !set.weight) {
+      showToast('Enter reps or weight first', 'error');
+      row.querySelector('.set-reps').focus();
+      return;
+    }
+  }
+
+  set.completed = !set.completed;
+  saveActive();
+
+  row.classList.toggle('done', set.completed);
+  const btn = row.querySelector('.set-check');
+  btn.classList.toggle('checked', set.completed);
+  btn.setAttribute('aria-pressed', set.completed);
+
+  const done = exercise.sets.filter(s => s.completed).length;
+  const countEl = container.querySelector(`[data-count="${exIdx}"]`);
+  if (countEl) countEl.textContent = `${done}/${exercise.sets.length}`;
+  container.querySelector(`[data-exercise="${exIdx}"]`)
+    ?.classList.toggle('all-done', done === exercise.sets.length);
+  updateProgress(container);
+
+  if (set.completed) {
+    vibrate(15);
+    if (settings.autoRestTimer !== false) {
+      showRestTimerPopup(settings.defaultRestTime || 90);
+    }
+  }
+}
+
+function updateProgress(container) {
+  const total = activeWorkout.exercises.reduce((a, e) => a + e.sets.length, 0);
+  const done = countCompletedSets(activeWorkout);
+  const progressEl = container.querySelector('#set-progress');
+  if (progressEl) progressEl.textContent = `${done}/${total} sets`;
+  const fill = container.querySelector('#workout-progress');
+  if (fill) fill.style.width = `${total ? (done / total) * 100 : 0}%`;
+}
+
+function removeExercise(container, settings, exIdx) {
+  const [removed] = activeWorkout.exercises.splice(exIdx, 1);
+  saveActive();
+  renderExercises(container, settings);
+  showToast(`${removed.name} removed`, 'success', {
+    action: {
+      label: 'Undo',
+      onClick: () => {
+        if (!activeWorkout) return;
+        activeWorkout.exercises.splice(exIdx, 0, removed);
+        saveActive();
+        renderExercises(container, settings);
+      }
+    }
+  });
+}
+
+function showExerciseMenu(container, settings, exIdx) {
+  const ex = activeWorkout.exercises[exIdx];
+  const last = activeWorkout.exercises.length - 1;
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-header">
+      <h3 class="modal-title">${escapeHtml(ex.name)}</h3>
+      <button class="modal-close" data-close aria-label="Close">&times;</button>
+    </div>
+    <div class="action-list">
+      <button class="action-item" data-act="progress">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>
+        View progress
+      </button>
+      <button class="action-item" data-act="up" ${exIdx === 0 ? 'disabled' : ''}>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        Move up
+      </button>
+      <button class="action-item" data-act="down" ${exIdx === last ? 'disabled' : ''}>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+        Move down
+      </button>
+      <button class="action-item" data-act="category">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+        Change muscle group
+      </button>
+      <button class="action-item danger" data-act="remove">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+        Remove exercise
+      </button>
+    </div>
+  `;
+  const close = showModal(el);
+
+  el.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    if (act === 'progress') {
+      showExerciseProgress(ex.name);
+      return;
+    }
+    if (act === 'category') {
+      showCategoryPicker(exIdx, container, settings);
+      return;
+    }
+    close();
+    if (act === 'remove') {
+      removeExercise(container, settings, exIdx);
+    } else if (act === 'up' || act === 'down') {
+      const to = act === 'up' ? exIdx - 1 : exIdx + 1;
+      const list = activeWorkout.exercises;
+      [list[exIdx], list[to]] = [list[to], list[exIdx]];
+      saveActive();
+      renderExercises(container, settings);
+    }
   });
 }
 
 function showCategoryPicker(exIdx, container, settings) {
-  const currentCat = activeWorkout.exercises[exIdx].category;
+  const ex = activeWorkout.exercises[exIdx];
   const el = document.createElement('div');
   el.innerHTML = `
     <div class="modal-header">
-      <h3 class="modal-title">Change Target Group</h3>
-      <button class="modal-close" id="catpick-close">&times;</button>
+      <h3 class="modal-title">Muscle group</h3>
+      <button class="modal-close" data-close aria-label="Close">&times;</button>
     </div>
-    <div class="chip-group mb-16">
-      ${categories.filter(c => c.id !== 'all').map(c => `
-        <button class="chip ${c.id === currentCat ? 'active' : ''}" data-pick-cat="${c.id}">${c.name}</button>
-      `).join('')}
-    </div>
+    <p class="modal-text">Applies to <strong>${escapeHtml(ex.name)}</strong> everywhere, including past workouts.</p>
+    <div class="chip-group">${categoryChips(ex.category)}</div>
   `;
-
   const close = showModal(el);
 
   el.addEventListener('click', (e) => {
-    if (e.target.closest('#catpick-close')) { close(); return; }
     const chip = e.target.closest('[data-pick-cat]');
-    if (chip) {
-      const newCategory = chip.dataset.pickCat;
-      const exerciseName = activeWorkout.exercises[exIdx].name;
-      activeWorkout.exercises[exIdx].category = newCategory;
-      store.setActiveWorkout(activeWorkout);
-
-      // Propagate to custom exercise definition and all historical workouts
-      store.updateCustomExercise({ name: exerciseName, category: newCategory });
-
-      renderExercises(container, settings);
-      close();
-      showToast(`Target group changed to ${newCategory}`);
-    }
-  });
-}
-
-function showDuplicateExerciseConfirm(name, existingCategory, newCategory, onConfirm) {
-  const confirmEl = document.createElement('div');
-  confirmEl.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Exercise Exists</h3>
-      <button class="modal-close" id="dup-cancel">&times;</button>
-    </div>
-    <p class="text-muted mb-16">An exercise named "<strong>${escapeHtml(name)}</strong>" already exists with target group "<strong>${escapeHtml(existingCategory)}</strong>".<br><br>Do you want to update it to "<strong>${escapeHtml(newCategory)}</strong>"?</p>
-    <div class="flex gap-8">
-      <button class="btn btn-primary btn-block" id="dup-update">Update</button>
-      <button class="btn btn-secondary btn-block" id="dup-cancel-btn">Cancel</button>
-    </div>
-  `;
-  const closeConfirm = showModal(confirmEl);
-  confirmEl.querySelector('#dup-cancel')?.addEventListener('click', closeConfirm);
-  confirmEl.querySelector('#dup-cancel-btn')?.addEventListener('click', closeConfirm);
-  confirmEl.querySelector('#dup-update')?.addEventListener('click', () => {
-    store.updateCustomExercise({ name, category: newCategory });
-    onConfirm();
-    closeConfirm();
-    showToast(`${name} updated`);
-  });
-}
-
-function showExercisePicker(container, settings) {
-  const el = document.createElement('div');
-  let filterCategory = 'all';
-  let searchQuery = '';
-  let customName = '';
-  let customCategory = '';
-
-  function updateCustomAddButton() {
-    const btn = el.querySelector('#custom-add');
-    if (btn) btn.disabled = !(customName.trim() && customCategory);
-  }
-
-  function renderCustomForm() {
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Create Custom Exercise</h3>
-        <button class="modal-close" id="picker-close">&times;</button>
-      </div>
-      <div class="mb-16">
-        <label class="input-label">Exercise Name</label>
-        <input type="text" class="input" id="custom-name" placeholder="Exercise name" maxlength="100">
-      </div>
-      <div class="mb-16">
-        <label class="input-label">Target Group</label>
-        <div class="chip-group">
-          ${categories.filter(c => c.id !== 'all').map(c => `
-            <button class="chip ${c.id === customCategory ? 'active' : ''}" data-custom-cat="${c.id}">${c.name}</button>
-          `).join('')}
-        </div>
-      </div>
-      <div class="flex gap-8">
-        <button class="btn btn-primary btn-block" id="custom-add" disabled>Add Exercise</button>
-        <button class="btn btn-secondary btn-block" id="custom-back">Back</button>
-      </div>
-    `;
-  }
-
-  function render() {
-    const customExercises = store.getCustomExercises();
-    const allExercises = [...exerciseDB, ...customExercises];
-    const filtered = allExercises.filter(ex => {
-      const matchCat = filterCategory === 'all' || ex.category === filterCategory;
-      const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch;
+    if (!chip) return;
+    const category = chip.dataset.pickCat;
+    activeWorkout.exercises.forEach(x => {
+      if (x.name.toLowerCase() === ex.name.toLowerCase()) x.category = category;
     });
-
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Add Exercise</h3>
-        <button class="modal-close" id="picker-close">&times;</button>
-      </div>
-      <div class="exercise-search mb-12">
-        <svg class="exercise-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-        </svg>
-        <input type="text" class="input" id="exercise-search" placeholder="Search exercises..." value="${searchQuery}">
-      </div>
-      <div class="chip-group mb-16">
-        ${categories.map(c => `
-          <button class="chip ${c.id === filterCategory ? 'active' : ''}" data-cat="${c.id}">${c.name}</button>
-        `).join('')}
-      </div>
-      <div style="max-height:300px;overflow-y:auto">
-        ${filtered.map(ex => {
-          const isCustom = customExercises.some(c => c.name === ex.name);
-          return `
-          <div class="list-item exercise-pick" data-name="${escapeHtml(ex.name)}" data-cat="${ex.category}">
-            <div class="list-item-content">
-              <div class="list-item-title">${escapeHtml(ex.name)}${isCustom ? ' <span class="text-sm text-accent">(custom)</span>' : ''}</div>
-              <div class="list-item-subtitle">${ex.category}</div>
-            </div>
-            ${isCustom ? '<button class="btn btn-sm btn-ghost delete-custom-exercise" data-custom-name="' + escapeHtml(ex.name) + '" title="Delete custom exercise" style="flex-shrink:0">&times;</button>' : ''}
-          </div>`;
-        }).join('')}
-        <div class="list-item exercise-pick" data-name="custom" data-cat="custom">
-          <div class="list-item-content">
-            <div class="list-item-title text-accent">+ Custom Exercise</div>
-            <div class="list-item-subtitle">Create and save your own exercise</div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  render();
-  const close = showModal(el);
-
-  // Use event delegation to avoid listener accumulation on re-renders
-  el.addEventListener('click', (e) => {
-    // Close button
-    if (e.target.closest('#picker-close')) {
-      close();
-      return;
-    }
-
-    // Category filter chips
-    const chip = e.target.closest('[data-cat]');
-    if (chip && !chip.classList.contains('exercise-pick')) {
-      filterCategory = chip.dataset.cat;
-      render();
-      // Re-focus search if it had text
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-      return;
-    }
-
-    // Custom form: category chip selection
-    const customChip = e.target.closest('[data-custom-cat]');
-    if (customChip) {
-      customCategory = customChip.dataset.customCat;
-      el.querySelectorAll('[data-custom-cat]').forEach(c => c.classList.remove('active'));
-      customChip.classList.add('active');
-      updateCustomAddButton();
-      return;
-    }
-
-    // Custom form: Add button
-    if (e.target.closest('#custom-add')) {
-      const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
-      if (name && customCategory) {
-        const result = store.saveCustomExercise({ name, category: customCategory });
-        if (result.saved) {
-          addExerciseToWorkout(name, customCategory, container, settings);
-          close();
-        } else {
-          close();
-          showDuplicateExerciseConfirm(name, result.existing.category, customCategory, () => {
-            addExerciseToWorkout(name, customCategory, container, settings);
-          });
-        }
-      }
-      return;
-    }
-
-    // Delete custom exercise
-    const deleteBtn = e.target.closest('.delete-custom-exercise');
-    if (deleteBtn) {
-      e.stopPropagation();
-      const nameToDelete = deleteBtn.dataset.customName;
-      store.deleteCustomExercise(nameToDelete);
-      showToast(`${nameToDelete} removed from custom exercises`);
-      render();
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-      return;
-    }
-
-    // Custom form: Back button
-    if (e.target.closest('#custom-back')) {
-      customName = '';
-      customCategory = '';
-      render();
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-      return;
-    }
-
-    // Exercise selection
-    const item = e.target.closest('.exercise-pick');
-    if (item) {
-      if (item.dataset.name === 'custom') {
-        customName = '';
-        customCategory = '';
-        renderCustomForm();
-        setTimeout(() => el.querySelector('#custom-name')?.focus(), 50);
-        return;
-      } else {
-        addExerciseToWorkout(item.dataset.name, item.dataset.cat, container, settings);
-        close();
-      }
-    }
-  });
-
-  el.addEventListener('input', (e) => {
-    if (e.target.id === 'exercise-search') {
-      searchQuery = e.target.value;
-      render();
-      // Keep focus and cursor position in search
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-    }
-    if (e.target.id === 'custom-name') {
-      customName = e.target.value;
-      updateCustomAddButton();
-    }
+    saveActive();
+    store.updateCustomExercise({ name: ex.name, category });
+    renderExercises(container, settings);
+    close();
+    showToast(`Moved to ${capitalize(category)}`);
   });
 }
 
 function addExerciseToWorkout(name, category, container, settings) {
+  const prev = getLastPerformance(store.getWorkouts(), name);
+  previousCache.set(name.toLowerCase(), prev);
+  const count = prev?.length || 3;
   activeWorkout.exercises.push({
     name,
     category,
-    sets: [{ reps: 10, weight: 0, completed: false }]
+    sets: Array.from({ length: count }, () => ({ reps: 0, weight: 0, completed: false }))
   });
-  store.setActiveWorkout(activeWorkout);
+  saveActive();
   renderExercises(container, settings);
-  showToast(`${name} added`);
+  // Bring the new exercise into view
+  const blocks = container.querySelectorAll('.exercise-block');
+  blocks[blocks.length - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function showTemplateCreator(container) {
-  const templateExercises = [];
+// ===== FINISH =====
 
-  function renderCreator() {
-    const settings = store.getSettings();
-    const unit = settings.weightUnit || 'kg';
-    container.innerHTML = `
-      <div class="flex items-center justify-between mb-16">
-        <p class="page-title" style="margin:0">Create Template</p>
-        <button class="btn btn-sm btn-ghost" id="tpl-cancel">Cancel</button>
+async function finishWorkout(container) {
+  const total = activeWorkout.exercises.reduce((a, e) => a + e.sets.length, 0);
+  const done = countCompletedSets(activeWorkout);
+
+  if (done === 0) {
+    const ok = await confirmDialog({
+      title: 'No sets completed',
+      message: 'Check off at least one set to save this workout. Discard it instead?',
+      confirmText: 'Discard workout',
+      cancelText: 'Keep going',
+      danger: true
+    });
+    if (ok) {
+      discardActive();
+      showToast('Workout discarded');
+      renderWorkoutStart(container);
+    }
+    return;
+  }
+
+  if (done < total) {
+    const ok = await confirmDialog({
+      title: 'Finish workout?',
+      message: `${plural(total - done, 'set')} ${total - done === 1 ? 'isn’t' : 'aren’t'} checked off and won’t be saved.`,
+      confirmText: 'Finish',
+      cancelText: 'Keep going'
+    });
+    if (!ok) return;
+  }
+
+  const previous = store.getWorkouts();
+  const workout = {
+    ...activeWorkout,
+    endTime: new Date().toISOString(),
+    exercises: activeWorkout.exercises
+      .map(ex => ({ ...ex, sets: ex.sets.filter(s => s.completed) }))
+      .filter(ex => ex.sets.length > 0)
+  };
+  store.saveWorkout(workout);
+  discardActive();
+  sounds.success();
+  vibrate([30, 60, 30]);
+
+  const prs = findNewPRs(workout, previous);
+  const volume = workoutVolume(workout);
+  const unit = store.getSettings().weightUnit;
+  const duration = formatDurationMs(new Date(workout.endTime) - new Date(workout.startTime));
+
+  renderWorkoutStart(container);
+
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="finish-summary">
+      <div class="finish-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>
       </div>
-      <div class="mb-16">
-        <label class="input-label">Template Name</label>
-        <input type="text" class="input" id="tpl-name" placeholder="e.g. Chest Day" maxlength="100">
+      <h3 class="modal-title">Workout complete!</h3>
+      <p class="text-muted mb-16">${escapeHtml(workout.name || '')}</p>
+      <div class="summary-stats">
+        <div><span class="summary-value">${duration}</span><span class="summary-label">Duration</span></div>
+        <div><span class="summary-value">${done}</span><span class="summary-label">Sets</span></div>
+        <div><span class="summary-value">${formatVolume(volume)}</span><span class="summary-label">Volume (${escapeHtml(unit)})</span></div>
+      </div>
+      ${prs.length ? `
+        <div class="pr-list">
+          <p class="section-title">New personal records</p>
+          ${prs.map(pr => `
+            <div class="pr-item">
+              <span class="pr-icon" aria-hidden="true">★</span>
+              <span class="pr-name">${escapeHtml(pr.name)}</span>
+              <span class="pr-value">${formatNumber(pr.weight)} ${escapeHtml(unit)}</span>
+              <span class="pr-prev">was ${formatNumber(pr.previous)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div class="modal-actions">
+        ${workout.templateId ? '' : '<button class="btn btn-secondary btn-block" id="finish-save-template">Save as template</button>'}
+        <button class="btn btn-primary btn-block" data-close>Done</button>
+      </div>
+    </div>
+  `;
+  showModal(el);
+
+  el.querySelector('#finish-save-template')?.addEventListener('click', async () => {
+    const name = await promptDialog({
+      title: 'Save as template',
+      label: 'Template name',
+      value: workout.name || '',
+      placeholder: 'e.g. Push Day'
+    });
+    if (!name) return;
+    store.saveTemplate({
+      id: generateId('t_'),
+      name,
+      exercises: workout.exercises.map(ex => ({
+        name: ex.name,
+        category: ex.category,
+        targetSets: ex.sets.length,
+        targetReps: ex.sets[0]?.reps || 10
+      }))
+    });
+    showToast('Template saved');
+    renderWorkoutStart(container);
+  });
+}
+
+function startElapsedTimer(container) {
+  clearInterval(elapsedInterval);
+  const el = container.querySelector('#elapsed-time');
+  if (!el) return;
+  const start = new Date(activeWorkout.startTime).getTime();
+  const update = () => { el.textContent = formatTime((Date.now() - start) / 1000); };
+  update();
+  elapsedInterval = setInterval(update, 1000);
+}
+
+// ===== TEMPLATE EDITOR =====
+
+function showTemplateEditor(container, existing = null) {
+  let name = existing?.name || '';
+  const items = (existing?.exercises || []).map(ex => ({
+    name: ex.name,
+    category: ex.category,
+    targetSets: ex.targetSets || 3,
+    targetReps: ex.targetReps || 10
+  }));
+
+  function render() {
+    container.innerHTML = `
+      <header class="page-header">
+        <button class="icon-btn" id="tpl-cancel" aria-label="Back">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <h1 class="page-title">${existing ? 'Edit Template' : 'New Template'}</h1>
+      </header>
+
+      <div class="input-group">
+        <label class="input-label" for="tpl-name">Template name</label>
+        <input type="text" class="input" id="tpl-name" placeholder="e.g. Push Day" maxlength="100" value="${escapeHtml(name)}" autocomplete="off">
       </div>
 
       <div id="tpl-exercises-list">
-        ${templateExercises.map((ex, exIdx) => `
-          <div class="exercise-block" data-exercise="${exIdx}">
-            <div class="exercise-block-header">
-              <div>
-                <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
-                <div class="exercise-block-category">${ex.category}</div>
-              </div>
-              <button class="btn btn-sm btn-ghost tpl-remove-exercise" data-idx="${exIdx}">Remove</button>
-            </div>
-            <div class="exercise-block-body">
-              <div class="set-header" style="grid-template-columns:40px 1fr 1fr">
-                <span>Set</span>
-                <span>Reps</span>
-                <span></span>
-              </div>
-              ${ex.sets.map((set, setIdx) => `
-                <div class="set-row" style="grid-template-columns:40px 1fr 36px">
-                  <span class="set-number">${setIdx + 1}</span>
-                  <input type="number" class="input tpl-set-reps" data-ex="${exIdx}" data-set="${setIdx}"
-                    value="${set.reps || ''}" placeholder="10" min="0" inputmode="numeric">
-                  <button class="remove-set tpl-remove-set" data-ex="${exIdx}" data-set="${setIdx}" title="Remove set">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
-                      <path d="M18 6L6 18M6 6l12 12"/>
-                    </svg>
+        ${items.map((ex, i) => `
+          <div class="tpl-item">
+            <span class="cat-bar" style="background:${categoryColor(ex.category)}" aria-hidden="true"></span>
+            <div class="tpl-item-main">
+              <div class="tpl-item-head">
+                <div>
+                  <div class="exercise-block-name">${escapeHtml(ex.name)}</div>
+                  <div class="exercise-block-category">${escapeHtml(capitalize(ex.category))}</div>
+                </div>
+                <div class="tpl-item-tools">
+                  <button class="icon-btn sm" data-move="up" data-i="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 15l-6-6-6 6"/></svg>
+                  </button>
+                  <button class="icon-btn sm" data-move="down" data-i="${i}" ${i === items.length - 1 ? 'disabled' : ''} aria-label="Move down">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+                  </button>
+                  <button class="icon-btn sm danger" data-remove="${i}" aria-label="Remove ${escapeHtml(ex.name)}">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   </button>
                 </div>
-              `).join('')}
-              <button class="add-set-btn tpl-add-set" data-ex="${exIdx}">+ Add Set</button>
+              </div>
+              <div class="tpl-steppers">
+                ${stepper('Sets', 'targetSets', i, ex.targetSets)}
+                ${stepper('Reps', 'targetReps', i, ex.targetReps)}
+              </div>
             </div>
           </div>
         `).join('')}
       </div>
 
       <button class="add-exercise-btn mb-16" id="tpl-add-exercise">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Add Exercise
       </button>
 
-      ${templateExercises.length > 0 ? `
-        <button class="btn btn-primary btn-lg btn-block" id="tpl-save">Save Template</button>
-      ` : ''}
+      <button class="btn btn-primary btn-lg btn-block" id="tpl-save" ${items.length ? '' : 'disabled'}>
+        ${existing ? 'Save Changes' : 'Save Template'}
+      </button>
     `;
 
-    container.querySelector('#tpl-cancel').addEventListener('click', () => {
-      renderWorkoutStart(container);
-    });
+    const nameInput = container.querySelector('#tpl-name');
+    nameInput.addEventListener('input', () => { name = nameInput.value; });
+
+    container.querySelector('#tpl-cancel').addEventListener('click', () => renderWorkoutStart(container));
 
     container.querySelector('#tpl-add-exercise').addEventListener('click', () => {
-      showTemplateExercisePicker(templateExercises, renderCreator);
+      openExercisePicker({
+        exclude: items.map(e => e.name),
+        onPick: (ex) => {
+          const prev = getLastPerformance(store.getWorkouts(), ex.name);
+          items.push({
+            ...ex,
+            targetSets: prev?.length || 3,
+            targetReps: prev?.[0]?.reps || 10
+          });
+          render();
+        }
+      });
     });
 
-    container.querySelector('#tpl-save')?.addEventListener('click', () => {
-      const name = container.querySelector('#tpl-name').value.trim().slice(0, 100);
-      if (!name) {
-        showToast('Please enter a template name', 'error');
-        container.querySelector('#tpl-name').focus();
+    container.querySelectorAll('[data-step]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.i, 10);
+        const field = btn.dataset.field;
+        const max = field === 'targetSets' ? 20 : 100;
+        items[i][field] = Math.max(1, Math.min(max, items[i][field] + parseInt(btn.dataset.step, 10)));
+        btn.closest('.stepper').querySelector('.stepper-value').textContent = items[i][field];
+      });
+    });
+
+    container.querySelectorAll('[data-move]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.i, 10);
+        const to = btn.dataset.move === 'up' ? i - 1 : i + 1;
+        [items[i], items[to]] = [items[to], items[i]];
+        render();
+      });
+    });
+
+    container.querySelectorAll('[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        items.splice(parseInt(btn.dataset.remove, 10), 1);
+        render();
+      });
+    });
+
+    container.querySelector('#tpl-save').addEventListener('click', () => {
+      const finalName = name.trim().slice(0, 100);
+      if (!finalName) {
+        showToast('Give your template a name', 'error');
+        nameInput.focus();
         return;
       }
       store.saveTemplate({
-        id: generateId('t_'),
-        name,
-        exercises: templateExercises.map(ex => ({
+        id: existing?.id || generateId('t_'),
+        name: finalName,
+        exercises: items.map(ex => ({
           name: ex.name,
           category: ex.category,
-          targetSets: ex.sets.length,
-          targetReps: ex.sets[0]?.reps || 10
+          targetSets: ex.targetSets,
+          targetReps: ex.targetReps
         }))
       });
-      showToast('Template saved!');
+      showToast(existing ? 'Template updated' : 'Template saved');
       renderWorkoutStart(container);
     });
-
-    container.querySelectorAll('.tpl-remove-exercise').forEach(btn => {
-      btn.addEventListener('click', () => {
-        templateExercises.splice(parseInt(btn.dataset.idx, 10), 1);
-        renderCreator();
-      });
-    });
-
-    container.querySelectorAll('.tpl-set-reps').forEach(input => {
-      input.addEventListener('change', (e) => {
-        const ex = parseInt(e.target.dataset.ex, 10);
-        const set = parseInt(e.target.dataset.set, 10);
-        templateExercises[ex].sets[set].reps = Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, 9999));
-      });
-    });
-
-    container.querySelectorAll('.tpl-add-set').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const exIdx = parseInt(btn.dataset.ex, 10);
-        const lastSet = templateExercises[exIdx].sets.at(-1);
-        templateExercises[exIdx].sets.push({ reps: lastSet?.reps || 10 });
-        renderCreator();
-      });
-    });
-
-    container.querySelectorAll('.tpl-remove-set').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const exIdx = parseInt(btn.dataset.ex, 10);
-        const setIdx = parseInt(btn.dataset.set, 10);
-        if (templateExercises[exIdx].sets.length <= 1) {
-          showToast('Use "Remove" to delete the exercise');
-          return;
-        }
-        templateExercises[exIdx].sets.splice(setIdx, 1);
-        renderCreator();
-      });
-    });
-  }
-
-  renderCreator();
-}
-
-function showTemplateExercisePicker(templateExercises, onDone) {
-  const el = document.createElement('div');
-  let filterCategory = 'all';
-  let searchQuery = '';
-  let customName = '';
-  let customCategory = '';
-
-  function updateCustomAddButton() {
-    const btn = el.querySelector('#custom-add');
-    if (btn) btn.disabled = !(customName.trim() && customCategory);
-  }
-
-  function renderCustomForm() {
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Create Custom Exercise</h3>
-        <button class="modal-close" id="picker-close">&times;</button>
-      </div>
-      <div class="mb-16">
-        <label class="input-label">Exercise Name</label>
-        <input type="text" class="input" id="custom-name" placeholder="Exercise name" maxlength="100">
-      </div>
-      <div class="mb-16">
-        <label class="input-label">Target Group</label>
-        <div class="chip-group">
-          ${categories.filter(c => c.id !== 'all').map(c => `
-            <button class="chip ${c.id === customCategory ? 'active' : ''}" data-custom-cat="${c.id}">${c.name}</button>
-          `).join('')}
-        </div>
-      </div>
-      <div class="flex gap-8">
-        <button class="btn btn-primary btn-block" id="custom-add" disabled>Add Exercise</button>
-        <button class="btn btn-secondary btn-block" id="custom-back">Back</button>
-      </div>
-    `;
-  }
-
-  function render() {
-    const customExercises = store.getCustomExercises();
-    const allExercises = [...exerciseDB, ...customExercises];
-    const filtered = allExercises.filter(ex => {
-      const matchCat = filterCategory === 'all' || ex.category === filterCategory;
-      const matchSearch = !searchQuery || ex.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchCat && matchSearch;
-    });
-
-    el.innerHTML = `
-      <div class="modal-header">
-        <h3 class="modal-title">Add Exercise</h3>
-        <button class="modal-close" id="picker-close">&times;</button>
-      </div>
-      <div class="exercise-search mb-12">
-        <svg class="exercise-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
-        </svg>
-        <input type="text" class="input" id="exercise-search" placeholder="Search exercises..." value="${searchQuery}">
-      </div>
-      <div class="chip-group mb-16">
-        ${categories.map(c => `
-          <button class="chip ${c.id === filterCategory ? 'active' : ''}" data-cat="${c.id}">${c.name}</button>
-        `).join('')}
-      </div>
-      <div style="max-height:300px;overflow-y:auto">
-        ${filtered.map(ex => {
-          const isCustom = customExercises.some(c => c.name === ex.name);
-          return `
-          <div class="list-item exercise-pick" data-name="${escapeHtml(ex.name)}" data-cat="${ex.category}">
-            <div class="list-item-content">
-              <div class="list-item-title">${escapeHtml(ex.name)}${isCustom ? ' <span class="text-sm text-accent">(custom)</span>' : ''}</div>
-              <div class="list-item-subtitle">${ex.category}</div>
-            </div>
-          </div>`;
-        }).join('')}
-        <div class="list-item exercise-pick" data-name="custom" data-cat="custom">
-          <div class="list-item-content">
-            <div class="list-item-title text-accent">+ Custom Exercise</div>
-            <div class="list-item-subtitle">Create and save your own exercise</div>
-          </div>
-        </div>
-      </div>
-    `;
   }
 
   render();
-  const close = showModal(el);
-
-  el.addEventListener('click', (e) => {
-    if (e.target.closest('#picker-close')) { close(); return; }
-
-    const chip = e.target.closest('[data-cat]');
-    if (chip && !chip.classList.contains('exercise-pick')) {
-      filterCategory = chip.dataset.cat;
-      render();
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-      return;
-    }
-
-    const customChip = e.target.closest('[data-custom-cat]');
-    if (customChip) {
-      customCategory = customChip.dataset.customCat;
-      el.querySelectorAll('[data-custom-cat]').forEach(c => c.classList.remove('active'));
-      customChip.classList.add('active');
-      updateCustomAddButton();
-      return;
-    }
-
-    if (e.target.closest('#custom-add')) {
-      const name = (el.querySelector('#custom-name')?.value || '').trim().slice(0, 100);
-      if (name && customCategory) {
-        const result = store.saveCustomExercise({ name, category: customCategory });
-        if (result.saved) {
-          templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
-          close();
-          onDone();
-          showToast(`${name} added`);
-        } else {
-          close();
-          showDuplicateExerciseConfirm(name, result.existing.category, customCategory, () => {
-            templateExercises.push({ name, category: customCategory, sets: [{ reps: 10 }] });
-            onDone();
-          });
-        }
-      }
-      return;
-    }
-
-    if (e.target.closest('#custom-back')) {
-      customName = '';
-      customCategory = '';
-      render();
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-      return;
-    }
-
-    const item = e.target.closest('.exercise-pick');
-    if (item) {
-      if (item.dataset.name === 'custom') {
-        customName = '';
-        customCategory = '';
-        renderCustomForm();
-        setTimeout(() => el.querySelector('#custom-name')?.focus(), 50);
-      } else {
-        templateExercises.push({
-          name: item.dataset.name,
-          category: item.dataset.cat,
-          sets: [{ reps: 10 }]
-        });
-        close();
-        onDone();
-        showToast(`${item.dataset.name} added`);
-      }
-    }
-  });
-
-  el.addEventListener('input', (e) => {
-    if (e.target.id === 'exercise-search') {
-      searchQuery = e.target.value;
-      render();
-      const search = el.querySelector('#exercise-search');
-      if (search) { search.value = searchQuery; search.focus(); }
-    }
-    if (e.target.id === 'custom-name') {
-      customName = e.target.value;
-      updateCustomAddButton();
-    }
-  });
 }
 
-function finishWorkout(container) {
-  activeWorkout.endTime = new Date().toISOString();
-  store.saveWorkout(activeWorkout);
-
-  // Capture data before clearing state
-  const completedWorkout = activeWorkout;
-  const exerciseCount = completedWorkout.exercises.length;
-  const setsCompleted = completedWorkout.exercises.reduce(
-    (a, e) => a + e.sets.filter(s => s.completed).length, 0
-  );
-
-  const close = showModal(`
-    <div class="text-center">
-      <div style="font-size:48px;margin-bottom:16px">&#127942;</div>
-      <h3 class="modal-title mb-8">Workout Complete!</h3>
-      <p class="text-muted mb-16">${exerciseCount} exercise${exerciseCount !== 1 ? 's' : ''} · ${setsCompleted} sets completed</p>
-      <div class="flex gap-8">
-        <button class="btn btn-primary btn-block" id="finish-done">Done</button>
-        <button class="btn btn-secondary btn-block" id="finish-save-template">Save as Template</button>
-      </div>
+function stepper(label, field, i, value) {
+  return `
+    <div class="stepper">
+      <span class="stepper-label">${label}</span>
+      <button class="stepper-btn" data-step="-1" data-field="${field}" data-i="${i}" aria-label="Decrease ${label.toLowerCase()}">−</button>
+      <span class="stepper-value">${value}</span>
+      <button class="stepper-btn" data-step="1" data-field="${field}" data-i="${i}" aria-label="Increase ${label.toLowerCase()}">+</button>
     </div>
-  `);
-
-  function cleanup() {
-    store.clearActiveWorkout();
-    activeWorkout = null;
-    clearInterval(elapsedInterval);
-    close();
-    renderWorkoutStart(container);
-  }
-
-  setTimeout(() => {
-    document.querySelector('#finish-done')?.addEventListener('click', cleanup);
-
-    document.querySelector('#finish-save-template')?.addEventListener('click', () => {
-      const name = prompt('Template name:', 'My Workout');
-      if (name?.trim()) {
-        const templateName = name.trim().slice(0, 100);
-        store.saveTemplate({
-          id: generateId('t_'),
-          name: templateName,
-          exercises: completedWorkout.exercises
-            .filter(ex => ex.sets && ex.sets.length > 0)
-            .map(ex => ({
-              name: ex.name,
-              category: ex.category,
-              targetSets: ex.sets.length,
-              targetReps: ex.sets[0].reps || 10
-            }))
-        });
-        showToast('Template saved!');
-      }
-      cleanup();
-    });
-  }, 100);
-}
-
-function startElapsedTimer(container) {
-  const el = container.querySelector('#elapsed-time');
-  if (!el) return;
-
-  function update() {
-    const elapsed = Math.floor((Date.now() - startTimestamp) / 1000);
-    el.textContent = formatTime(elapsed);
-  }
-
-  update();
-  elapsedInterval = setInterval(update, 1000);
+  `;
 }
 
 // ===== REST TIMER POPUP =====
-function showRestTimerPopup(seconds) {
-  dismissRestTimer();
 
-  // Use the global timer for rest
+function showRestTimerPopup(seconds) {
+  dismissRestTimer(true);
   globalTimer.startRest(seconds);
 
-  const restPresets = [30, 60, 90, 120, 180];
-
-  // Create floating rest timer popup
   const popup = document.createElement('div');
   popup.id = 'rest-timer-popup';
   popup.className = 'rest-timer-popup';
+  popup.setAttribute('role', 'timer');
+  popup.setAttribute('aria-label', 'Rest timer');
   popup.innerHTML = `
-    <div class="rest-timer-header">
-      <span class="rest-timer-title">Rest</span>
-      <button class="rest-timer-dismiss" id="rest-dismiss">&times;</button>
-    </div>
-    <div class="rest-timer-time" id="rest-time">${formatTime(seconds)}</div>
-    <div class="rest-timer-bar">
-      <div class="rest-timer-fill" id="rest-fill" style="width:100%"></div>
-    </div>
-    <div class="rest-timer-actions">
-      ${restPresets.map(sec => `
-        <button class="rest-timer-btn ${sec === seconds ? 'active' : ''}" data-rest="${sec}">${formatTime(sec)}</button>
-      `).join('')}
-      <button class="rest-timer-btn rest-skip" id="rest-skip">Skip</button>
+    <div class="rest-timer-bar"><div class="rest-timer-fill" id="rest-fill"></div></div>
+    <div class="rest-timer-body">
+      <button class="rest-adjust" data-adjust="-15" aria-label="Subtract 15 seconds">−15</button>
+      <div class="rest-timer-center">
+        <span class="rest-timer-title">Rest</span>
+        <span class="rest-timer-time" id="rest-time">${formatTime(seconds)}</span>
+      </div>
+      <button class="rest-adjust" data-adjust="15" aria-label="Add 15 seconds">+15</button>
+      <button class="btn btn-primary btn-sm" id="rest-skip">Skip</button>
+      <button class="icon-btn sm" id="rest-dismiss" aria-label="Hide rest timer">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
     </div>
   `;
   document.body.appendChild(popup);
-
-  // Animate in
+  document.body.classList.add('has-floating-timer');
   requestAnimationFrame(() => popup.classList.add('visible'));
+  refreshFloatingTimer();
 
   const timeEl = popup.querySelector('#rest-time');
   const fillEl = popup.querySelector('#rest-fill');
 
-  // Subscribe to global timer for updates
-  function subscribeToTimer() {
-    return globalTimer.subscribe((state) => {
-      if (!state.isActive || state.mode !== 'rest') {
-        dismissRestTimer();
-        return;
-      }
-      if (timeEl) timeEl.textContent = formatTime(Math.max(0, state.timeLeft));
-      if (fillEl) fillEl.style.width = `${Math.max(0, state.progress * 100)}%`;
-    });
-  }
-  restTimerUnsubscribe = subscribeToTimer();
-
-  popup.querySelector('#rest-dismiss')?.addEventListener('click', dismissRestTimer);
-  popup.querySelector('#rest-skip')?.addEventListener('click', () => {
-    globalTimer.stop();
-    dismissRestTimer();
-    showToast('Rest skipped');
+  restTimerUnsubscribe = globalTimer.subscribe((state) => {
+    if (!state.isActive || state.mode !== 'rest') {
+      dismissRestTimer();
+      return;
+    }
+    timeEl.textContent = formatTime(state.timeLeft);
+    fillEl.style.transform = `scaleX(${Math.max(0, state.progress)})`;
+    popup.classList.toggle('urgent', state.timeLeft <= 5);
   });
-  // Quick rest presets — restart rest timer at the selected duration
-  popup.querySelectorAll('[data-rest]').forEach(btn => {
+
+  popup.querySelector('#rest-dismiss').addEventListener('click', () => dismissRestTimer());
+  popup.querySelector('#rest-skip').addEventListener('click', () => {
+    globalTimer.stop();
+  });
+  popup.querySelectorAll('[data-adjust]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const newDuration = parseInt(btn.dataset.rest, 10);
-      popup.querySelectorAll('[data-rest]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      // Unsubscribe before restarting so stop() inside startRest
-      // doesn't trigger dismissRestTimer via the subscription
-      if (restTimerUnsubscribe) restTimerUnsubscribe();
-      globalTimer.startRest(newDuration);
-      restTimerUnsubscribe = subscribeToTimer();
-      // Immediately update display for the new duration (next tick is 1s away)
-      if (timeEl) timeEl.textContent = formatTime(newDuration);
-      if (fillEl) fillEl.style.width = '100%';
+      globalTimer.addTime(parseInt(btn.dataset.adjust, 10));
     });
   });
 }
 
-function dismissRestTimer() {
+// `replacing` skips the floating-timer refresh while a new popup is coming
+function dismissRestTimer(replacing = false) {
   if (restTimerUnsubscribe) {
     restTimerUnsubscribe();
     restTimerUnsubscribe = null;
   }
-  clearInterval(restTimerInterval);
-  restTimerInterval = null;
   const popup = document.getElementById('rest-timer-popup');
   if (popup) {
+    popup.removeAttribute('id');
     popup.classList.remove('visible');
-    setTimeout(() => popup.remove(), 200);
+    setTimeout(() => popup.remove(), 250);
+  }
+  if (!replacing) {
+    document.body.classList.remove('has-floating-timer');
+    refreshFloatingTimer();
   }
 }

@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 export default defineConfig({
   base: '/fitness-coach/',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version)
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -11,8 +17,8 @@ export default defineConfig({
         name: 'FitCoach - Workout Tracker',
         short_name: 'FitCoach',
         description: 'Your personal fitness coach with timers, workout logging, and progress tracking',
-        theme_color: '#0f0f1a',
-        background_color: '#0f0f1a',
+        theme_color: '#0b0c10',
+        background_color: '#0b0c10',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/fitness-coach/',

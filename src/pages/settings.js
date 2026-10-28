@@ -1,237 +1,298 @@
 import { store } from '../store.js';
-import { showToast, showModal } from '../utils.js';
+import { showToast, confirmDialog, escapeHtml, todayStr, showModal } from '../utils.js';
+import { applyTheme } from '../theme.js';
+
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '';
 
 export function settingsPage(container) {
   const settings = store.getSettings();
-  const bodyStats = store.getBodyStats();
+  const workouts = store.getWorkouts();
+
+  const segmented = (name, options, current) => `
+    <div class="segmented sm" role="radiogroup" aria-label="${name}">
+      ${options.map(([value, label]) => `
+        <button class="segment ${String(current) === String(value) ? 'active' : ''}" data-setting="${name}" data-value="${value}"
+          role="radio" aria-checked="${String(current) === String(value)}">${label}</button>
+      `).join('')}
+    </div>
+  `;
+
+  const toggle = (id, checked, label) => `
+    <label class="toggle">
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''} aria-label="${label}">
+      <span class="toggle-slider"></span>
+    </label>
+  `;
 
   container.innerHTML = `
-    <p class="page-title">Settings</p>
+    <header class="page-header">
+      <h1 class="page-title">Settings</h1>
+    </header>
 
     <p class="section-title">Appearance</p>
     <div class="settings-group">
       <div class="settings-item">
-        <div>
-          <div class="settings-item-label">Dark Mode</div>
-          <div class="settings-item-desc">Use dark theme</div>
+        <div class="settings-item-text">
+          <div class="settings-item-label">Theme</div>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-theme" ${settings.theme === 'dark' ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
+        ${segmented('theme', [['system', 'Auto'], ['dark', 'Dark'], ['light', 'Light']], settings.theme)}
       </div>
     </div>
 
-    <p class="section-title">Workout</p>
+    <p class="section-title">Training</p>
     <div class="settings-group">
       <div class="settings-item">
-        <div>
-          <div class="settings-item-label">Weight Unit</div>
-          <div class="settings-item-desc">Used for logging and display</div>
+        <div class="settings-item-text">
+          <div class="settings-item-label">Weight unit</div>
         </div>
-        <select class="input" id="weight-unit" style="width:80px;padding:8px">
-          <option value="kg" ${settings.weightUnit === 'kg' ? 'selected' : ''}>kg</option>
-          <option value="lbs" ${settings.weightUnit === 'lbs' ? 'selected' : ''}>lbs</option>
-        </select>
+        ${segmented('weightUnit', [['kg', 'kg'], ['lbs', 'lbs']], settings.weightUnit)}
       </div>
       <div class="settings-item">
-        <div>
-          <div class="settings-item-label">Default Rest Time</div>
-          <div class="settings-item-desc">Seconds between sets</div>
+        <div class="settings-item-text">
+          <div class="settings-item-label">Weekly goal</div>
+          <div class="settings-item-desc">Workouts per week</div>
         </div>
-        <select class="input" id="rest-time" style="width:80px;padding:8px">
-          <option value="30" ${settings.defaultRestTime === 30 ? 'selected' : ''}>30s</option>
-          <option value="60" ${settings.defaultRestTime === 60 ? 'selected' : ''}>60s</option>
-          <option value="90" ${settings.defaultRestTime === 90 ? 'selected' : ''}>90s</option>
-          <option value="120" ${settings.defaultRestTime === 120 ? 'selected' : ''}>120s</option>
-          <option value="180" ${settings.defaultRestTime === 180 ? 'selected' : ''}>180s</option>
-        </select>
+        <div class="stepper">
+          <button class="stepper-btn" data-goal="-1" aria-label="Decrease weekly goal">−</button>
+          <span class="stepper-value" id="goal-value">${settings.weeklyGoal}</span>
+          <button class="stepper-btn" data-goal="1" aria-label="Increase weekly goal">+</button>
+        </div>
       </div>
       <div class="settings-item">
-        <div>
-          <div class="settings-item-label">Sound Effects</div>
-          <div class="settings-item-desc">Timer completion beeps</div>
+        <div class="settings-item-text">
+          <div class="settings-item-label">Auto rest timer</div>
+          <div class="settings-item-desc">Start resting when you check off a set</div>
         </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-sound" ${settings.soundEnabled ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </label>
+        ${toggle('toggle-auto-rest', settings.autoRestTimer, 'Auto rest timer')}
       </div>
-      <div class="settings-item">
-        <div>
-          <div class="settings-item-label">Weekly Goal</div>
-          <div class="settings-item-desc">Workouts per week target</div>
+      <div class="settings-item column">
+        <div class="settings-item-text">
+          <div class="settings-item-label">Default rest time</div>
         </div>
-        <select class="input" id="weekly-goal" style="width:70px;padding:8px">
-          ${[2,3,4,5,6,7].map(n => `<option value="${n}" ${(settings.weeklyGoal || 4) === n ? 'selected' : ''}>${n}</option>`).join('')}
-        </select>
+        ${segmented('defaultRestTime', [[30, '0:30'], [60, '1:00'], [90, '1:30'], [120, '2:00'], [180, '3:00']], settings.defaultRestTime)}
       </div>
     </div>
 
-    <p class="section-title">Body Stats</p>
+    <p class="section-title">Feedback</p>
     <div class="settings-group">
-      <a href="#/weight" class="settings-item" style="cursor:pointer;text-decoration:none;color:inherit">
-        <div>
-          <div class="settings-item-label">Weight Tracking</div>
-          <div class="settings-item-desc">${bodyStats.length > 0 ? `Latest: ${bodyStats[0].weight} ${bodyStats[0].unit || settings.weightUnit}` : 'Track your body weight'}</div>
+      <div class="settings-item">
+        <div class="settings-item-text">
+          <div class="settings-item-label">Sounds</div>
+          <div class="settings-item-desc">Timer beeps and countdowns</div>
         </div>
-        <span class="text-muted">&rsaquo;</span>
-      </a>
+        ${toggle('toggle-sound', settings.soundEnabled, 'Sounds')}
+      </div>
+      ${'vibrate' in navigator ? `
+        <div class="settings-item">
+          <div class="settings-item-text">
+            <div class="settings-item-label">Vibration</div>
+            <div class="settings-item-desc">Buzz when a timer ends</div>
+          </div>
+          ${toggle('toggle-vibration', settings.vibrationEnabled, 'Vibration')}
+        </div>
+      ` : ''}
     </div>
 
-    <p class="section-title">Data</p>
+    <p class="section-title">Your data</p>
     <div class="settings-group">
-      <div class="settings-item" style="cursor:pointer" id="export-data">
-        <div>
-          <div class="settings-item-label">Export Data</div>
-          <div class="settings-item-desc">Download all data as JSON</div>
+      <button class="settings-item clickable" id="export-data">
+        <div class="settings-item-text">
+          <div class="settings-item-label">Export backup</div>
+          <div class="settings-item-desc">${workouts.length} workouts · download as JSON</div>
         </div>
-        <span class="text-muted">&rsaquo;</span>
-      </div>
-      <div class="settings-item" style="cursor:pointer" id="import-data">
-        <div>
-          <div class="settings-item-label">Import Data</div>
-          <div class="settings-item-desc">Restore from JSON backup</div>
+        <svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="settings-item clickable" id="import-data">
+        <div class="settings-item-text">
+          <div class="settings-item-label">Restore backup</div>
+          <div class="settings-item-desc">Replace current data with a JSON file</div>
         </div>
-        <span class="text-muted">&rsaquo;</span>
-      </div>
-      <div class="settings-item" style="cursor:pointer" id="clear-data">
-        <div>
-          <div class="settings-item-label text-danger">Clear All Data</div>
-          <div class="settings-item-desc">Delete all workouts, templates, and stats</div>
+        <svg class="chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+      <button class="settings-item clickable" id="clear-data">
+        <div class="settings-item-text">
+          <div class="settings-item-label text-danger">Delete all data</div>
+          <div class="settings-item-desc">Workouts, templates, weight and custom exercises</div>
         </div>
+      </button>
+    </div>
+    <p class="settings-footnote">Everything is stored on this device only. Export a backup regularly so you don't lose your history.</p>
+
+    <div class="app-footer">
+      <div class="app-footer-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6.5 6.5h11M6.5 17.5h11M6 12h12"/><rect x="2" y="6" width="4" height="12" rx="1.5"/><rect x="18" y="6" width="4" height="12" rx="1.5"/></svg>
       </div>
+      <p>FitCoach${APP_VERSION ? ` v${escapeHtml(APP_VERSION)}` : ''}</p>
+      <p class="text-muted">Built with care for your gains</p>
     </div>
 
-    <div class="text-center mt-24 text-muted text-sm">
-      <p>FitCoach v1.0.0</p>
-      <p class="mt-8">Built with care for your gains</p>
-    </div>
-
-    <input type="file" id="import-file-input" accept=".json" class="hidden">
+    <input type="file" id="import-file-input" accept=".json,application/json" class="hidden">
   `;
 
-  // Theme toggle
-  container.querySelector('#toggle-theme').addEventListener('change', (e) => {
-    const theme = e.target.checked ? 'dark' : 'light';
-    store.updateSettings({ theme });
-    document.documentElement.setAttribute('data-theme', theme);
+  // Segmented settings
+  container.querySelectorAll('[data-setting]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.setting;
+      let value = btn.dataset.value;
+      if (key === 'defaultRestTime') value = parseInt(value, 10);
+      const current = store.getSettings()[key];
+      if (current === value) return;
+
+      if (key === 'weightUnit') {
+        const changed = await changeUnit(current, value);
+        if (!changed) return;
+      } else {
+        store.updateSettings({ [key]: value });
+      }
+      if (key === 'theme') applyTheme(value);
+
+      btn.parentElement.querySelectorAll('[data-setting]').forEach(b => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-checked', on);
+      });
+    });
   });
 
-  // Weight unit
-  container.querySelector('#weight-unit').addEventListener('change', (e) => {
-    store.updateSettings({ weightUnit: e.target.value });
-    showToast(`Weight unit set to ${e.target.value}`);
+  container.querySelectorAll('[data-goal]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const goal = Math.max(1, Math.min(7, store.getSettings().weeklyGoal + parseInt(btn.dataset.goal, 10)));
+      store.updateSettings({ weeklyGoal: goal });
+      container.querySelector('#goal-value').textContent = goal;
+    });
   });
 
-  // Rest time
-  container.querySelector('#rest-time').addEventListener('change', (e) => {
-    store.updateSettings({ defaultRestTime: parseInt(e.target.value) });
-  });
-
-  // Sound toggle
-  container.querySelector('#toggle-sound').addEventListener('change', (e) => {
-    store.updateSettings({ soundEnabled: e.target.checked });
-  });
-
-  // Weekly goal
-  container.querySelector('#weekly-goal').addEventListener('change', (e) => {
-    store.updateSettings({ weeklyGoal: parseInt(e.target.value) });
-    showToast(`Weekly goal set to ${e.target.value}`);
-  });
+  const bindToggle = (id, key) => {
+    container.querySelector(id)?.addEventListener('change', (e) => {
+      store.updateSettings({ [key]: e.target.checked });
+    });
+  };
+  bindToggle('#toggle-auto-rest', 'autoRestTimer');
+  bindToggle('#toggle-sound', 'soundEnabled');
+  bindToggle('#toggle-vibration', 'vibrationEnabled');
 
   // Export
   container.querySelector('#export-data').addEventListener('click', () => {
-    const data = {
-      workouts: store.getWorkouts(),
-      templates: store.getTemplates(),
-      bodyStats: store.getBodyStats(),
-      settings: store.getSettings(),
-      exportDate: new Date().toISOString()
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(store.exportData(), null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fitcoach-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `fitcoach-backup-${todayStr()}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    showToast('Data exported!');
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast('Backup downloaded');
   });
 
   // Import
   const fileInput = container.querySelector('#import-file-input');
-  container.querySelector('#import-data').addEventListener('click', () => {
-    fileInput.click();
-  });
+  container.querySelector('#import-data').addEventListener('click', () => fileInput.click());
 
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
+    // Reset so picking the same file again still fires `change`
+    fileInput.value = '';
     if (!file) return;
-
-    // Reject files larger than 10MB
     if (file.size > 10 * 1024 * 1024) {
       showToast('File too large (max 10MB)', 'error');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
+      let data;
       try {
-        const data = JSON.parse(evt.target.result);
-
-        // Validate imported data structure
-        if (data.workouts && Array.isArray(data.workouts)) {
-          store.set('workouts', data.workouts.slice(0, 10000));
-        }
-        if (data.templates && Array.isArray(data.templates)) {
-          store.set('templates', data.templates.slice(0, 500));
-        }
-        if (data.bodyStats && Array.isArray(data.bodyStats)) {
-          store.set('bodyStats', data.bodyStats.slice(0, 5000));
-        }
-        if (data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)) {
-          store.set('settings', data.settings);
-        }
-        showToast('Data imported successfully!');
-        settingsPage(container); // Refresh
+        data = JSON.parse(evt.target.result);
       } catch {
-        showToast('Invalid backup file', 'error');
+        showToast('That file isn\'t valid JSON', 'error');
+        return;
+      }
+      const count = Array.isArray(data?.workouts) ? data.workouts.length : 0;
+      const ok = await confirmDialog({
+        title: 'Restore backup?',
+        message: `This replaces your current data with the backup${count ? ` (${count} workouts)` : ''}. Your current data will be lost unless you export it first.`,
+        confirmText: 'Restore',
+        danger: true
+      });
+      if (!ok) return;
+      try {
+        const summary = store.importData(data);
+        applyTheme();
+        showToast(`Restored ${summary.workouts ?? 0} workouts`);
+        settingsPage(container);
+      } catch (err) {
+        showToast(err.message || 'Invalid backup file', 'error');
       }
     };
-    reader.onerror = () => {
-      showToast('Failed to read file', 'error');
-    };
+    reader.onerror = () => showToast('Failed to read file', 'error');
     reader.readAsText(file);
   });
 
-  // Clear data
+  // Clear data — requires typing to confirm
   container.querySelector('#clear-data').addEventListener('click', () => {
-    const close = showModal(`
+    const el = document.createElement('div');
+    el.innerHTML = `
       <div class="modal-header">
-        <h3 class="modal-title">Clear All Data?</h3>
-        <button class="modal-close" id="clear-cancel">&times;</button>
+        <h3 class="modal-title">Delete all data?</h3>
       </div>
-      <p class="text-muted mb-16">This will permanently delete all your workouts, templates, and body stats. This cannot be undone.</p>
-      <div class="flex gap-8">
-        <button class="btn btn-danger btn-block" id="clear-confirm">Delete Everything</button>
-        <button class="btn btn-secondary btn-block" id="clear-cancel2">Cancel</button>
+      <p class="modal-text">This permanently deletes ${workouts.length} workouts, your templates, weight log and custom exercises. Type <strong>DELETE</strong> to confirm.</p>
+      <input type="text" class="input mb-16" id="clear-confirm-input" autocomplete="off" autocapitalize="characters" placeholder="DELETE">
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-block" data-close>Cancel</button>
+        <button class="btn btn-danger-solid btn-block" id="clear-confirm" disabled>Delete everything</button>
       </div>
-    `);
-
-    setTimeout(() => {
-      document.querySelector('#clear-confirm')?.addEventListener('click', () => {
-        store.set('workouts', []);
-        store.set('templates', []);
-        store.set('bodyStats', []);
-        store.clearActiveWorkout();
-        close();
-        showToast('All data cleared');
-        settingsPage(container);
-      });
-      document.querySelector('#clear-cancel')?.addEventListener('click', close);
-      document.querySelector('#clear-cancel2')?.addEventListener('click', close);
-    }, 50);
+    `;
+    const close = showModal(el);
+    const input = el.querySelector('#clear-confirm-input');
+    const btn = el.querySelector('#clear-confirm');
+    input.addEventListener('input', () => { btn.disabled = input.value.trim().toUpperCase() !== 'DELETE'; });
+    btn.addEventListener('click', () => {
+      store.clearAll();
+      close();
+      showToast('All data deleted');
+      settingsPage(container);
+    });
   });
 }
 
+async function changeUnit(from, to) {
+  const hasData = store.getWorkouts().length > 0 || store.getBodyStats().length > 0 || store.getActiveWorkout();
+  if (!hasData) {
+    store.updateSettings({ weightUnit: to });
+    showToast(`Using ${to}`);
+    return true;
+  }
+
+  return new Promise((resolve) => {
+    let result = false;
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <div class="modal-header">
+        <h3 class="modal-title">Switch to ${to}?</h3>
+      </div>
+      <p class="modal-text">Convert your logged weights from ${from} to ${to}? For example, 100 ${from} becomes ${to === 'lbs' ? '220.5 lbs' : '45.4 kg'}.</p>
+      <div class="modal-actions stacked">
+        <button class="btn btn-primary btn-block" id="unit-convert">Convert my data</button>
+        <button class="btn btn-secondary btn-block" id="unit-keep">Just change the label</button>
+        <button class="btn btn-ghost btn-block" data-close>Cancel</button>
+      </div>
+    `;
+    const close = showModal(el, { onClose: () => resolve(result) });
+    el.querySelector('#unit-convert').addEventListener('click', () => {
+      store.convertAllWeights(from, to);
+      store.updateSettings({ weightUnit: to });
+      showToast(`Converted to ${to}`);
+      result = true;
+      close();
+    });
+    el.querySelector('#unit-keep').addEventListener('click', () => {
+      store.updateSettings({ weightUnit: to });
+      // Relabel body-weight entries so they display in the new unit
+      store.set('bodyStats', store.getBodyStats().map(s => ({ ...s, unit: to })));
+      showToast(`Using ${to}`);
+      result = true;
+      close();
+    });
+  });
+}

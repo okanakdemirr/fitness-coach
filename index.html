@@ -3,104 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
-  <meta name="theme-color" content="#0f0f1a" />
+  <meta name="theme-color" content="#0b0c10" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="FitCoach" />
   <meta name="description" content="FitCoach - Your personal fitness coach with timers, workout logging, and progress tracking" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <title>FitCoach</title>
+  <script>
+    // Apply the saved theme before first paint to avoid a dark/light flash
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('fitcoach_settings') || '{}');
+        var t = s.theme || 'dark';
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        if (t === 'light') document.querySelector('meta[name="theme-color"]').setAttribute('content', '#f4f5f8');
+      } catch (e) {}
+    })();
+  </script>
   <style>
-    /* Critical inline CSS – guarantees styled first paint even if external CSS/JS fail to load */
+    /* Critical inline CSS – guarantees styled first paint even if external CSS/JS fail to load.
+       Keep tokens in sync with src/styles/main.css */
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    :root{--bg-primary:#0f0f1a;--bg-secondary:#1a1a2e;--bg-tertiary:#252542;--bg-hover:#2d2d4a;--accent:#00d4aa;--accent-dim:rgba(0,212,170,.15);--accent-secondary:#667eea;--danger:#ff6b6b;--danger-dim:rgba(255,107,107,.15);--warning:#ffd93d;--warning-dim:rgba(255,217,61,.15);--success:#51cf66;--text-primary:#fff;--text-secondary:#b0b0c4;--text-muted:#8a8a9e;--border:#2d2d4a;--radius:12px;--radius-sm:8px;--radius-lg:16px;--shadow:0 4px 12px rgba(0,0,0,.3);--nav-height:72px;--header-height:56px;--transition:.2s ease;color-scheme:dark}
-    [data-theme="light"]{--bg-primary:#f5f5fa;--bg-secondary:#fff;--bg-tertiary:#eeeef4;--bg-hover:#e4e4ed;--accent:#00b894;--accent-dim:rgba(0,184,148,.12);--accent-secondary:#5568d4;--danger:#e55050;--danger-dim:rgba(229,80,80,.12);--warning:#e6c235;--warning-dim:rgba(230,194,53,.12);--success:#40b555;--text-primary:#1a1a2e;--text-secondary:#555566;--text-muted:#777788;--border:#dddde5;--shadow:0 4px 12px rgba(0,0,0,.08);color-scheme:light}
+    :root{--bg-primary:#0b0c10;--bg-secondary:#15171d;--bg-tertiary:#1e2129;--bg-hover:#262a33;--bg-elevated:#181a21;--border:rgba(255,255,255,.07);--border-strong:rgba(255,255,255,.13);--accent:#c6f24e;--accent-ink:#c6f24e;--on-accent:#0b0c10;--accent-dim:rgba(198,242,78,.13);--accent-secondary:#8b7cff;--danger:#ff5d6c;--danger-dim:rgba(255,93,108,.14);--warning:#ffb547;--warning-dim:rgba(255,181,71,.14);--success:#4ade80;--text-primary:#f4f5f7;--text-secondary:#a8adb9;--text-muted:#80858f;--glass:rgba(11,12,16,.78);--radius:16px;--radius-sm:10px;--radius-lg:22px;--nav-height:68px;--header-height:56px;--font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color-scheme:dark}
+    [data-theme="light"]{--bg-primary:#f4f5f8;--bg-secondary:#fff;--bg-tertiary:#eef0f4;--bg-hover:#e5e8ee;--bg-elevated:#fff;--border:rgba(16,18,24,.08);--border-strong:rgba(16,18,24,.15);--accent:#b8ec3a;--accent-ink:#4a7a00;--on-accent:#10140a;--accent-dim:rgba(110,170,0,.13);--accent-secondary:#6a5cf0;--danger:#e5484d;--danger-dim:rgba(229,72,77,.11);--warning:#c77c00;--warning-dim:rgba(217,138,0,.13);--success:#2f9e44;--text-primary:#111318;--text-secondary:#4b505c;--text-muted:#6b7080;--glass:rgba(244,245,248,.82);color-scheme:light}
     html{height:100%;-webkit-text-size-adjust:100%;overscroll-behavior:none}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100%;overflow-x:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+    body{font-family:var(--font);font-size:15px;line-height:1.45;background:var(--bg-primary);color:var(--text-primary);min-height:100%;overflow-x:hidden;overscroll-behavior:none;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-tap-highlight-color:transparent}
+    button{font:inherit;color:inherit;background:none;border:none}
+    a{color:inherit;text-decoration:none}
     #app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
-    #app-header{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) calc(16px + env(safe-area-inset-right,0px)) 0 calc(16px + env(safe-area-inset-left,0px));background:var(--bg-primary);border-bottom:1px solid var(--border)}
-    .header-title{font-size:20px;font-weight:700;color:var(--accent);letter-spacing:-.5px}
-    .header-btn{background:none;border:none;color:var(--text-primary);cursor:pointer;padding:8px;border-radius:var(--radius-sm);transition:background var(--transition)}
-    #page-content{flex:1;padding:16px calc(16px + env(safe-area-inset-right,0px)) calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 16px) calc(16px + env(safe-area-inset-left,0px));max-width:600px;width:100%;margin:0 auto}
-    #bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-around;height:calc(var(--nav-height) + env(safe-area-inset-bottom,0px));padding:0 env(safe-area-inset-left,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-right,0px);background:var(--bg-secondary);border-top:1px solid var(--border);transform:translateZ(0)}
-    .nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 12px;color:var(--text-muted);text-decoration:none;font-size:11px;font-weight:500;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
-    .nav-item.active,.nav-item[aria-current="page"]{color:var(--accent)}
-    .nav-icon{width:24px;height:24px}
+    #app-header{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;height:calc(var(--header-height) + env(safe-area-inset-top,0px));padding:env(safe-area-inset-top,0px) calc(16px + env(safe-area-inset-right,0px)) 0 calc(16px + env(safe-area-inset-left,0px));background:var(--glass);-webkit-backdrop-filter:saturate(160%) blur(18px);backdrop-filter:saturate(160%) blur(18px);border-bottom:1px solid var(--border)}
+    .header-brand{display:flex;align-items:center;gap:10px}
+    .header-logo{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--on-accent)}
+    .header-title{font-size:19px;font-weight:800;letter-spacing:-.5px;color:var(--text-primary)}
+    .header-btn{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;color:var(--text-secondary)}
+    #page-content{flex:1;padding:12px calc(16px + env(safe-area-inset-right,0px)) calc(var(--nav-height) + env(safe-area-inset-bottom,0px) + 24px) calc(16px + env(safe-area-inset-left,0px));max-width:640px;width:100%;margin:0 auto}
+    #bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-around;height:calc(var(--nav-height) + env(safe-area-inset-bottom,0px));padding:0 calc(8px + env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) calc(8px + env(safe-area-inset-left,0px));background:var(--glass);-webkit-backdrop-filter:saturate(160%) blur(18px);backdrop-filter:saturate(160%) blur(18px);border-top:1px solid var(--border);transform:translateZ(0)}
+    .nav-item{flex:1;max-width:96px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;color:var(--text-muted);font-size:11px;font-weight:600;letter-spacing:.1px}
+    .nav-icon-wrap{display:grid;place-items:center;width:52px;height:30px;border-radius:999px}
+    .nav-icon{width:22px;height:22px}
+    .nav-item.active{color:var(--text-primary)}
+    .nav-item.active .nav-icon-wrap{background:var(--accent-dim);color:var(--accent-ink)}
     .hidden{display:none!important}
-    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none}
+    #modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none}
     #modal-overlay.visible{opacity:1;pointer-events:auto}
-    .page-title{font-size:24px;font-weight:700;margin-bottom:16px;letter-spacing:-.5px}
-    .section-title{font-size:14px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+    .page-title{font-size:30px;font-weight:800;letter-spacing:-.8px;line-height:1.1}
+    .section-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
     .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted)}
-    .empty-state svg{width:64px;height:64px;margin-bottom:16px;opacity:.4}
-    .card{background:var(--bg-secondary);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border:none;border-radius:var(--radius);font-size:15px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;white-space:nowrap}
-    .btn-primary{background:var(--accent);color:#0f0f1a}
+    .card{display:block;background:var(--bg-secondary);border-radius:var(--radius);padding:16px;border:1px solid var(--border)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 20px;border:none;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:var(--on-accent)}
     .btn-secondary{background:var(--bg-tertiary);color:var(--text-primary)}
-    .btn-ghost{background:transparent;color:var(--text-secondary);padding:8px 16px}
-    .btn-sm{padding:8px 16px;font-size:13px}
     .btn-block{width:100%}
-    .toast{background:var(--bg-tertiary);color:var(--text-primary);padding:12px 20px;border-radius:var(--radius);font-size:14px;font-weight:500;box-shadow:var(--shadow);white-space:nowrap;pointer-events:auto;border-left:3px solid var(--accent)}
-    @keyframes page-fade-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    #page-content>*{animation:page-fade-in .2s ease}
   </style>
 </head>
 <body>
   <div id="app">
     <header id="app-header">
-      <h1 class="header-title">FitCoach</h1>
-      <a href="#/settings" class="header-btn" aria-label="Settings">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+      <a href="#/" class="header-brand" aria-label="FitCoach home">
+        <span class="header-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg>
+        </span>
+        <span class="header-title">FitCoach</span>
+      </a>
+      <a href="#/settings" class="header-btn nav-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </a>
     </header>
     <main id="page-content" role="main"></main>
-    <nav id="bottom-nav" role="navigation" aria-label="Main navigation">
+    <nav id="bottom-nav" aria-label="Main navigation">
       <a href="#/" class="nav-item" data-page="dashboard">
-        <svg class="nav-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
+        <span class="nav-icon-wrap"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></span>
         <span>Home</span>
       </a>
       <a href="#/workout" class="nav-item" data-page="workout">
-        <svg class="nav-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6.5 6.5h11M6 12h12M6.5 17.5h11"/>
-          <rect x="2" y="4" width="4" height="16" rx="1"/>
-          <rect x="18" y="4" width="4" height="16" rx="1"/>
-        </svg>
+        <span class="nav-icon-wrap"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11"/></svg></span>
         <span>Workout</span>
       </a>
       <a href="#/timer" class="nav-item" data-page="timer">
-        <svg class="nav-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="13" r="9"/>
-          <polyline points="12 9 12 13 15 14"/>
-          <path d="M9 2h6M12 2v2"/>
-        </svg>
+        <span class="nav-icon-wrap"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5M9 2h6M12 2v3"/></svg></span>
         <span>Timer</span>
       </a>
       <a href="#/history" class="nav-item" data-page="history">
-        <svg class="nav-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 8v4l3 3"/>
-          <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>
-        </svg>
-        <span>History</span>
+        <span class="nav-icon-wrap"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg></span>
+        <span>Progress</span>
       </a>
       <a href="#/tools" class="nav-item" data-page="tools">
-        <svg class="nav-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-        </svg>
+        <span class="nav-icon-wrap"><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></span>
         <span>Tools</span>
       </a>
     </nav>
   </div>
   <div id="modal-overlay" class="hidden" aria-hidden="true"></div>
-  <div id="toast-container" role="status" aria-live="polite"></div>
+  <div id="toast-container" aria-live="polite"></div>
   <noscript>
-    <div style="text-align:center;padding:40px 20px;color:#b8b8cc">
+    <div style="text-align:center;padding:40px 20px;color:#a8adb9">
       <p style="font-size:18px;font-weight:700;margin-bottom:8px">JavaScript Required</p>
       <p style="font-size:14px">Please enable JavaScript to use FitCoach.</p>
     </div>
@@ -153,10 +157,10 @@
           var params = new URLSearchParams(location.search);
           if (params.has('_fc')) {
             // Auto-recovery already attempted — show manual recovery UI
-            content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#b8b8cc">' +
-              '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff6b6b">App failed to load</p>' +
+            content.innerHTML = '<div style="text-align:center;padding:48px 24px;color:#a8adb9">' +
+              '<p style="font-size:18px;font-weight:700;margin-bottom:12px;color:#ff5d6c">App failed to load</p>' +
               '<p style="font-size:14px;margin-bottom:20px">Tap below to clear cache and try again.</p>' +
-              '<button id="fc-recovery-btn" style="padding:12px 24px;background:#00d4aa;color:#0f0f1a;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:15px;position:relative;z-index:10">Clear Cache &amp; Reload</button></div>';
+              '<button id="fc-recovery-btn" style="padding:12px 24px;background:#c6f24e;color:#0b0c10;border:none;border-radius:12px;font-weight:600;cursor:pointer;font-size:15px;position:relative;z-index:10">Clear Cache &amp; Reload</button></div>';
             document.getElementById('fc-recovery-btn').addEventListener('click', function() {
               clearCachesAndReload();
             });

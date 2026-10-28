@@ -28,32 +28,37 @@ No test framework is configured. There are no lint or format scripts.
 ## Project Structure
 
 ```
-index.html                  # Single HTML entry point (inline critical CSS)
-vite.config.js              # Vite + PWA plugin config (base: /fitness-coach/)
+index.html                  # Single HTML entry point (inline critical CSS + pre-paint theme script)
+vite.config.js              # Vite + PWA plugin config (base: /fitness-coach/), defines __APP_VERSION__
 src/
-  main.js                   # App init, theme, PWA install prompts, service worker
-  router.js                 # Hash-based SPA router
-  store.js                  # LocalStorage data layer
-  utils.js                  # Shared helpers (toasts, modals, audio, wake lock)
-  globalTimer.js             # Global timer state
-  floatingTimer.js           # Floating timer widget
-  muscleMap.js               # SVG muscle map visualization (front/back body views)
+  main.js                   # App init, theme, PWA install prompts, audio unlock
+  router.js                 # Hash-based SPA router (closes modals, scrolls to top on navigation)
+  store.js                  # LocalStorage data layer (settings defaults, unit conversion, backup/restore)
+  utils.js                  # Dates (local time), formatting, toasts, modals/dialogs, sound, vibration, wake lock
+  analytics.js              # Derived stats: streaks, volume, PRs, e1RM, exercise history
+  theme.js                  # dark / light / system theme handling
+  charts.js                 # Dependency-free SVG line and bar charts
+  exercisePicker.js         # Shared exercise picker sheet (search, filters, recent, custom exercises)
+  exerciseProgress.js       # Per-exercise progress sheet (chart, bests, history)
+  globalTimer.js            # Global timer state (persists across reloads)
+  floatingTimer.js          # Floating timer widget
+  muscleMap.js              # SVG muscle map visualization (front/back body views)
   data/
-    exercises.js             # Built-in exercise database (59 exercises, 8 categories)
+    exercises.js            # Built-in exercise database (81 exercises, 7 categories)
   pages/
-    dashboard.js             # Home — stats overview, quick actions
-    workout.js               # Workout session management
-    timer.js                 # Countdown, rest, interval timers
-    history.js               # Workout history + calendar heatmap
-    stats.js                 # Analytics and charts
-    tools.js                 # Fitness calculators + stopwatch
-    weight.js                # Body weight tracking + chart
-    settings.js              # App configuration + data management
+    dashboard.js            # Home — start/resume, weekly goal, stats, muscle map, recent workouts
+    workout.js              # Workout session, templates (create/edit), rest timer popup
+    timer.js                # Countdown, rest, interval timers
+    history.js              # Workout history + calendar heatmap (Progress tab)
+    stats.js                # Analytics and charts (Progress tab)
+    tools.js                # Plate/1RM/BMI calculators, percentage table, stopwatch
+    weight.js               # Body weight tracking + chart
+    settings.js             # App configuration + data management
   styles/
-    main.css                 # CSS variables, layout, reset
-    components.css           # Reusable UI components
-    pages.css                # Page-specific styles
-public/                      # Static assets (icons, favicons)
+    main.css                # Design tokens (CSS variables), layout, reset, modal/toast
+    components.css          # Reusable UI components
+    pages.css               # Page-specific styles
+public/                     # Static assets (icons, favicons)
 ```
 
 ## Architecture
@@ -68,7 +73,13 @@ Hash-based SPA router (`src/router.js`). Routes are registered in `main.js` via 
 Each page module in `src/pages/` exports a single function (e.g., `dashboardPage`, `workoutPage`). The function receives a container DOM element, builds the UI via `innerHTML` and DOM APIs, attaches event listeners, and returns a cleanup function if needed.
 
 ### Theming
-Dark/light themes controlled by `data-theme` attribute on `<html>`. CSS variables defined in `index.html` inline styles and `src/styles/main.css`. Theme preference stored in settings.
+Dark/light themes controlled by `data-theme` on `<html>` (`theme.js`; the "system" setting follows `prefers-color-scheme`). Design tokens live in `src/styles/main.css` and are mirrored in the inline critical CSS in `index.html` — keep them in sync. Use `--accent` for filled surfaces (with `--on-accent` text) and `--accent-ink` for accent-colored text, strokes and charts, since the light theme needs a darker ink for contrast.
+
+### Dates
+Workout and body-weight dates are local-time `YYYY-MM-DD` strings. Always use `todayStr()` / `toDateStr()` from `utils.js` — never `toISOString()`, which converts to UTC and shifts the day.
+
+### Modals
+`showModal(content, { onClose })` opens a bottom sheet and returns a `close` function. Elements with `data-close` close it automatically. Use `confirmDialog()` / `promptDialog()` (Promise-based) instead of `confirm()` / `prompt()`.
 
 ## Code Conventions
 

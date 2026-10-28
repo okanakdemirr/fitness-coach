@@ -1,230 +1,206 @@
 import { store } from '../store.js';
-import { formatDate, formatDuration, todayStr, escapeHtml } from '../utils.js';
+import {
+  formatDate, formatDuration, escapeHtml, todayStr, toDateStr, addDays, startOfWeek,
+  formatVolume, formatNumber, plural
+} from '../utils.js';
 import { renderMuscleMap } from '../muscleMap.js';
+import {
+  calcStreak, calcWeekStreak, thisWeekWorkouts, totalVolume, countCompletedSets, workoutTitle
+} from '../analytics.js';
+import { startWorkoutFrom } from './workout.js';
 
 export function dashboardPage(container) {
   const settings = store.getSettings();
   const workouts = store.getWorkouts();
-  const todayWorkout = store.getTodayWorkout();
   const activeWorkout = store.getActiveWorkout();
+  const templates = store.getTemplates();
+  const goal = settings.weeklyGoal || 4;
+  const unit = settings.weightUnit;
 
-  // Calculate stats
+  const weekWorkouts = thisWeekWorkouts(workouts);
+  const streak = calcStreak(workouts);
+  const weekStreak = calcWeekStreak(workouts, goal);
+  const weekVolume = totalVolume(weekWorkouts);
+  const latestWeight = store.getBodyStats()[0] || null;
   const now = new Date();
-  const dayOfWeek = now.getDay();
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - ((dayOfWeek + 6) % 7)); // Monday
-  const weekStartStr = weekStart.toISOString().split('T')[0];
-  const workoutsThisWeek = workouts.filter(w => w.date >= weekStartStr).length;
-
-  // Streak calculation
-  let streak = 0;
-  const checkDate = new Date();
-  // If no workout today, start checking from yesterday
-  if (!todayWorkout) {
-    checkDate.setDate(checkDate.getDate() - 1);
-  }
-  while (true) {
-    const dateStr = checkDate.toISOString().split('T')[0];
-    if (workouts.some(w => w.date === dateStr)) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-
-  const greeting = getGreeting();
 
   container.innerHTML = `
-    <p class="dashboard-greeting">${greeting}</p>
-    <p class="dashboard-date">${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+    <header class="dash-header">
+      <p class="dash-date">${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      <h1 class="dash-greeting">${getGreeting()}</h1>
+    </header>
 
     ${activeWorkout ? `
-      <div class="card card-clickable mb-24" id="resume-workout" style="border-color: var(--accent)">
-        <div class="flex items-center justify-between mb-8">
-          <span class="workout-timer-badge"><span class="dot"></span> Active Workout</span>
-          <span class="text-sm text-muted">${(activeWorkout.exercises || []).length} exercises</span>
+      <a href="#/workout" class="hero-card active-hero mb-16">
+        <div class="hero-card-top">
+          <span class="live-pill"><span class="live-dot"></span>In progress</span>
+          <span class="hero-elapsed tabular" id="active-elapsed"></span>
         </div>
-        <p class="text-sm text-muted">Tap to resume your workout</p>
+        <div class="hero-title">${escapeHtml(activeWorkout.name || 'Workout')}</div>
+        <div class="hero-sub">${plural((activeWorkout.exercises || []).length, 'exercise')} · ${countCompletedSets(activeWorkout)} sets done</div>
+        <span class="btn btn-primary btn-block mt-16">Resume workout</span>
+      </a>
+    ` : `
+      <div class="hero-card mb-16">
+        <div class="hero-title">${weekWorkouts.length >= goal ? 'Goal smashed this week' : 'Ready to train?'}</div>
+        <div class="hero-sub">${weekWorkouts.length >= goal
+          ? 'Every extra session is a bonus.'
+          : `${plural(goal - weekWorkouts.length, 'workout')} left to hit your weekly goal.`}</div>
+        <a href="#/workout" class="btn btn-primary btn-lg btn-block mt-16" id="dash-start">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Start workout
+        </a>
+        ${templates.length ? `
+          <div class="hero-templates">
+            ${templates.slice(0, 4).map(t => `
+              <button class="chip quick-template" data-id="${escapeHtml(t.id)}">${escapeHtml(t.name)}</button>
+            `).join('')}
+          </div>
+        ` : ''}
       </div>
-    ` : ''}
+    `}
 
-    ${renderWeeklyGoal(workoutsThisWeek, settings.weeklyGoal || 4)}
+    ${renderWeekCard(workouts, weekWorkouts.length, goal, weekStreak)}
 
     <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-value">${streak}</div>
-        <div class="stat-label">Day Streak</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${workoutsThisWeek}</div>
-        <div class="stat-label">This Week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${workouts.length}</div>
-        <div class="stat-label">Total</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-value">${getTotalVolume(workouts, settings.weightUnit)}</div>
-        <div class="stat-label">Weekly Vol (${settings.weightUnit})</div>
-      </div>
+      <a href="#/stats" class="stat-card">
+        <span class="stat-icon" style="--tone:var(--warning)" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2c1 4 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.6 1 2.5 2 3 0-3 0-6 1-9.5z"/></svg>
+        </span>
+        <span class="stat-value">${streak}</span>
+        <span class="stat-label">Day streak</span>
+      </a>
+      <a href="#/stats" class="stat-card">
+        <span class="stat-icon" style="--tone:var(--accent-secondary)" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6.5 6.5h11M6.5 17.5h11M6 12h12"/><rect x="2" y="6" width="4" height="12" rx="1.5"/><rect x="18" y="6" width="4" height="12" rx="1.5"/></svg>
+        </span>
+        <span class="stat-value">${workouts.length}</span>
+        <span class="stat-label">Workouts</span>
+      </a>
+      <a href="#/stats" class="stat-card">
+        <span class="stat-icon" style="--tone:var(--accent-ink)" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
+        </span>
+        <span class="stat-value">${formatVolume(weekVolume)}</span>
+        <span class="stat-label">Week volume · ${escapeHtml(unit)}</span>
+      </a>
+      <a href="#/weight" class="stat-card">
+        <span class="stat-icon" style="--tone:#b18cff" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 7h14l-1.5 13h-11z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+        </span>
+        <span class="stat-value">${latestWeight ? formatNumber(latestWeight.weight) : '—'}</span>
+        <span class="stat-label">${latestWeight ? `Body weight · ${escapeHtml(latestWeight.unit || unit)}` : 'Log body weight'}</span>
+      </a>
     </div>
 
     <div id="muscle-map-container"></div>
 
-    <p class="section-title">Quick Actions</p>
-    <div class="quick-actions">
-      <a href="#/workout" class="quick-action">
-        <div class="quick-action-icon" style="background: var(--accent-dim)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2">
-            <path d="M12 5v14M5 12h14"/>
-          </svg>
-        </div>
-        <span class="quick-action-label">New Workout</span>
-      </a>
-      <a href="#/timer" class="quick-action">
-        <div class="quick-action-icon" style="background: var(--warning-dim)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2">
-            <circle cx="12" cy="13" r="9"/>
-            <polyline points="12 9 12 13 15 14"/>
-            <path d="M9 2h6"/>
-          </svg>
-        </div>
-        <span class="quick-action-label">Timer</span>
-      </a>
-      <a href="#/history" class="quick-action">
-        <div class="quick-action-icon" style="background: rgba(102,126,234,0.15)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-secondary)" stroke-width="2">
-            <path d="M12 8v4l3 3"/>
-            <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>
-          </svg>
-        </div>
-        <span class="quick-action-label">History</span>
-      </a>
-      <a href="#/weight" class="quick-action">
-        <div class="quick-action-icon" style="background: rgba(165,94,234,0.15)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#a55eea" stroke-width="2">
-            <path d="M12 3v18M3 12h18M7 8l5-5 5 5M7 16l5 5 5-5"/>
-          </svg>
-        </div>
-        <span class="quick-action-label">Weight</span>
-      </a>
-    </div>
-
-    ${todayWorkout ? `
-      <p class="section-title">Today's Workout</p>
-      <div class="card mb-16">
-        <div class="flex items-center justify-between mb-8">
-          <span class="font-bold">${(todayWorkout.exercises || []).length} Exercises</span>
-          <span class="text-sm text-muted">${formatDuration(todayWorkout.startTime, todayWorkout.endTime)}</span>
-        </div>
-        ${(todayWorkout.exercises || []).map(ex => `
-          <div class="text-sm mb-8">
-            <span class="font-bold">${escapeHtml(ex.name)}</span>
-            <span class="text-muted"> — ${(ex.sets || []).filter(s => s.completed).length} sets</span>
-          </div>
-        `).join('')}
-      </div>
-    ` : ''}
-
-    ${getRecentWorkouts(workouts)}
+    ${renderRecent(workouts, unit)}
   `;
 
-  // Event listener for resume workout
-  const resumeBtn = container.querySelector('#resume-workout');
-  if (resumeBtn) {
-    resumeBtn.addEventListener('click', () => {
+  container.querySelectorAll('.quick-template').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tpl = templates.find(t => t.id === btn.dataset.id);
+      if (!tpl) return;
+      startWorkoutFrom({ name: tpl.name, exercises: tpl.exercises, templateId: tpl.id });
       window.location.hash = '#/workout';
-    });
-  }
-
-  // Event listeners for recent workout cards
-  container.querySelectorAll('[data-nav="history"]').forEach(card => {
-    card.addEventListener('click', () => {
-      location.hash = '#/history';
     });
   });
 
-  // Initialize muscle map
+  // Live elapsed time on the resume card
+  let interval = null;
+  const elapsedEl = container.querySelector('#active-elapsed');
+  if (elapsedEl && activeWorkout) {
+    const start = new Date(activeWorkout.startTime).getTime();
+    const update = () => {
+      const mins = Math.floor((Date.now() - start) / 60000);
+      elapsedEl.textContent = mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    };
+    update();
+    interval = setInterval(update, 30000);
+  }
+
   const muscleMapEl = container.querySelector('#muscle-map-container');
   if (muscleMapEl) renderMuscleMap(muscleMapEl);
+
+  return () => clearInterval(interval);
 }
 
 function getGreeting() {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning!';
-  if (hour < 17) return 'Good afternoon!';
-  return 'Good evening!';
+  if (hour < 5) return 'Up late? 🌙';
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-function getTotalVolume(workouts, unit) {
-  const now = new Date();
-  const weekStart = new Date(now);
-  const dayOfWeek = now.getDay();
-  weekStart.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-  const weekStartStr = weekStart.toISOString().split('T')[0];
-
-  let volume = 0;
-  workouts
-    .filter(w => w.date >= weekStartStr)
-    .forEach(w => {
-      (w.exercises || []).forEach(ex => {
-        (ex.sets || []).forEach(s => {
-          if (s.completed && s.weight && s.reps) {
-            volume += s.weight * s.reps;
-          }
-        });
-      });
-    });
-
-  if (volume >= 1000) return `${(volume / 1000).toFixed(1)}k`;
-  return String(volume);
-}
-
-function renderWeeklyGoal(current, goal) {
-  const pct = Math.min(1, current / goal);
-  const circumference = 2 * Math.PI * 40;
-  const offset = circumference * (1 - pct);
-  const goalMet = current >= goal;
+function renderWeekCard(workouts, done, goal, weekStreak) {
+  const pct = Math.min(1, done / goal);
+  const r = 26;
+  const circ = 2 * Math.PI * r;
+  const today = todayStr();
+  const monday = startOfWeek();
+  const dates = new Set(workouts.map(w => w.date));
+  const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return `
-    <div class="weekly-goal-card mb-24">
-      <div class="weekly-goal-ring">
-        <svg viewBox="0 0 100 100" width="80" height="80">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--bg-tertiary)" stroke-width="8"/>
-          <circle cx="50" cy="50" r="40" fill="none"
-            stroke="${goalMet ? 'var(--accent)' : 'var(--accent-secondary)'}"
-            stroke-width="8" stroke-linecap="round"
-            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"
-            transform="rotate(-90 50 50)"
-            style="transition: stroke-dashoffset 0.5s ease"/>
+    <a href="#/history" class="card week-card mb-16">
+      <div class="week-ring" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="64" height="64">
+          <circle cx="32" cy="32" r="${r}" class="ring-bg"/>
+          <circle cx="32" cy="32" r="${r}" class="ring-fill ${pct >= 1 ? 'complete' : ''}"
+            stroke-dasharray="${circ}" stroke-dashoffset="${circ * (1 - pct)}" transform="rotate(-90 32 32)"/>
         </svg>
-        <span class="weekly-goal-text">${current}/${goal}</span>
+        <span class="week-ring-text">${done}<small>/${goal}</small></span>
       </div>
-      <div class="weekly-goal-info">
-        <div class="font-bold">${goalMet ? 'Goal reached!' : `${goal - current} more to go`}</div>
-        <div class="text-sm text-muted">Weekly workout goal</div>
+      <div class="week-info">
+        <div class="week-title">This week${weekStreak > 1 ? ` <span class="badge badge-warning">${weekStreak} wk streak</span>` : ''}</div>
+        <div class="week-days" aria-label="Workout days this week">
+          ${letters.map((l, i) => {
+            const d = toDateStr(addDays(monday, i));
+            const cls = dates.has(d) ? 'done' : d === today ? 'today' : d > today ? 'future' : '';
+            return `<span class="week-day ${cls}" title="${d}">${l}</span>`;
+          }).join('')}
+        </div>
       </div>
-    </div>
+    </a>
   `;
 }
 
-function getRecentWorkouts(workouts) {
+function renderRecent(workouts, unit) {
   const recent = workouts.slice(0, 3);
-  if (recent.length === 0) return '';
+  if (recent.length === 0) {
+    return `
+      <div class="empty-state compact">
+        <div class="empty-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+        </div>
+        <p class="empty-title">Your journey starts here</p>
+        <p>Finish your first workout and your progress will show up on this screen.</p>
+      </div>
+    `;
+  }
 
   return `
-    <p class="section-title">Recent Workouts</p>
+    <div class="section-header">
+      <h2 class="section-title">Recent workouts</h2>
+      <a href="#/history" class="link-btn">See all</a>
+    </div>
     ${recent.map(w => `
-      <div class="workout-summary-card" data-nav="history">
+      <a href="#/history?w=${encodeURIComponent(w.id)}" class="workout-summary-card">
         <div class="workout-summary-header">
-          <span class="workout-summary-title">${formatDate(w.date)}</span>
-          <span class="workout-summary-time">${formatDuration(w.startTime, w.endTime)}</span>
+          <span class="workout-summary-title">${escapeHtml(workoutTitle(w))}</span>
+          <span class="workout-summary-date">${escapeHtml(formatDate(w.date))}</span>
+        </div>
+        <div class="workout-summary-meta">
+          <span>${formatDuration(w.startTime, w.endTime)}</span>
+          <span>${countCompletedSets(w)} sets</span>
+          <span>${formatVolume(totalVolume([w]))} ${escapeHtml(unit)}</span>
         </div>
         <div class="workout-summary-exercises">
           ${(w.exercises || []).map(ex => `<span class="workout-summary-exercise">${escapeHtml(ex.name)}</span>`).join('')}
         </div>
-      </div>
+      </a>
     `).join('')}
   `;
 }

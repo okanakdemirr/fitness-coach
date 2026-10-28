@@ -1,8 +1,7 @@
 // Global timer module — singleton state accessible from any page
-import {
-  formatTime, playBeep, playDoubleBeep, playTripleBeep,
-  requestWakeLock, releaseWakeLock, showToast
-} from './utils.js';
+import { sounds, vibrate, requestWakeLock, releaseWakeLock, showToast } from './utils.js';
+
+const PERSIST_KEY = 'fitcoach_timer';
 
 // ===== STATE =====
 let timerInterval = null;
@@ -24,114 +23,40 @@ let _tickRefTimeLeft = 0;
 // Listeners: any part of the app can subscribe to timer ticks
 const listeners = new Set();
 
-// ===== SOUND HELPERS =====
-// Each sound creates a fresh AudioContext to avoid browser suspension issues.
-// The context is closed after the sound finishes to free resources.
-
-function isSoundEnabled() {
-  try {
-    const raw = localStorage.getItem('fitcoach_settings');
-    if (raw) {
-      const s = JSON.parse(raw);
-      if (s.soundEnabled === false) return false;
-    }
-  } catch { /* ignore */ }
-  return true;
-}
-
-function createContext() {
-  return new (window.AudioContext || window.webkitAudioContext)();
-}
-
-function playTone(frequency, duration, volume = 0.25, type = 'sine') {
-  try {
-    const ctx = createContext();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = frequency;
-    osc.type = type;
-    gain.gain.value = volume;
-    osc.start();
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.stop(ctx.currentTime + duration);
-    osc.onended = () => ctx.close();
-  } catch { /* Audio not available */ }
-}
-
-function playCountdownTick() {
-  if (!isSoundEnabled()) return;
-  playTone(880, 0.15, 0.25);
-}
-
 function maybePlayTick(prev, current) {
-  if (current !== prev && current > 0 && (current <= 5 || current === 10)) {
-    playCountdownTick();
+  if (current !== prev && current > 0 && current <= 3) {
+    sounds.tick();
   }
 }
 
-function playWarningBeep() {
-  if (!isSoundEnabled()) return;
-  playTone(1200, 0.3, 0.25, 'triangle');
+function snapshot() {
+  return {
+    timeLeft,
+    totalTime,
+    isRunning,
+    isPaused,
+    isActive: isRunning || isPaused,
+    mode: timerMode,
+    label: timerLabel,
+    progress: totalTime > 0 ? timeLeft / totalTime : 1,
+    intervalState: { ...intervalState },
+    intervalConfig: { ...intervalConfig }
+  };
 }
 
-function playStartSound() {
-  if (!isSoundEnabled()) return;
+// Persist so a running timer survives reloads and the OS killing the PWA
+function persist() {
   try {
-    const ctx = createContext();
-    // Rising two-tone "go" sound
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.frequency.value = 600;
-    osc1.type = 'sine';
-    gain1.gain.value = 0.25;
-    osc1.start();
-    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-    osc1.stop(ctx.currentTime + 0.15);
-
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.frequency.value = 900;
-    osc2.type = 'sine';
-    gain2.gain.value = 0.25;
-    osc2.start(ctx.currentTime + 0.15);
-    gain2.gain.setValueAtTime(0.25, ctx.currentTime + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    osc2.stop(ctx.currentTime + 0.35);
-    // Close context after the last tone ends
-    osc2.onended = () => ctx.close();
-  } catch { /* Audio not available */ }
-}
-
-function playFinishSound() {
-  if (!isSoundEnabled()) return;
-  try {
-    const ctx = createContext();
-    // Triumphant ascending three-tone
-    const freqs = [700, 880, 1100];
-    const delays = [0, 0.2, 0.4];
-    freqs.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      const startAt = ctx.currentTime + delays[i];
-      gain.gain.setValueAtTime(0, startAt);
-      gain.gain.linearRampToValueAtTime(0.3, startAt + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.4);
-      osc.start(startAt);
-      osc.stop(startAt + 0.4);
-      // Close on the last oscillator
-      if (i === 2) osc.onended = () => ctx.close();
-    });
-  } catch { /* Audio not available */ }
+    if (!isRunning && !isPaused) {
+      localStorage.removeItem(PERSIST_KEY);
+      return;
+    }
+    localStorage.setItem(PERSIST_KEY, JSON.stringify({
+      timeLeft, totalTime, isRunning, isPaused, timerMode, timerLabel,
+      intervalConfig, intervalState,
+      refTime: _tickRefTime, refTimeLeft: _tickRefTimeLeft
+    }));
+  } catch { /* ignore */ }
 }
 
 // ===== PUBLIC API =====
@@ -148,61 +73,53 @@ export const globalTimer = {
   get intervalState() { return { ...intervalState }; },
   get progress() { return totalTime > 0 ? timeLeft / totalTime : 1; },
 
+  snapshot,
+
   // Subscribe/unsubscribe to tick updates
   subscribe(fn) {
     listeners.add(fn);
     return () => listeners.delete(fn);
   },
 
-  // Start a countdown timer
-  startCountdown(seconds, label = '') {
-    this.stop();
-    timerMode = 'countdown';
+  _begin(mode, label, seconds) {
+    this._halt();
+    timerMode = mode;
     timerLabel = label;
     timeLeft = seconds;
     totalTime = seconds;
     isRunning = true;
     isPaused = false;
     requestWakeLock();
-    playStartSound();
-    this._notify();
+    sounds.start();
     this._startTick();
+    this._notify();
+  },
+
+  // Start a countdown timer
+  startCountdown(seconds, label = '') {
+    this._begin('countdown', label, seconds);
   },
 
   // Start a rest timer
   startRest(seconds) {
-    this.stop();
-    timerMode = 'rest';
-    timerLabel = 'REST';
-    timeLeft = seconds;
-    totalTime = seconds;
-    isRunning = true;
-    isPaused = false;
-    requestWakeLock();
-    playStartSound();
-    this._notify();
-    this._startTick();
+    this._begin('rest', 'REST', seconds);
   },
 
   // Start interval timer
   startInterval(config) {
-    this.stop();
-    timerMode = 'interval';
-    timerLabel = 'INTERVAL';
     intervalConfig = { ...intervalConfig, ...config };
     intervalState = { round: 0, phase: 'prepare', totalRounds: intervalConfig.rounds };
-    timeLeft = intervalConfig.prepareTime;
-    totalTime = intervalConfig.prepareTime;
-    isRunning = true;
-    isPaused = false;
-    requestWakeLock();
-    playStartSound();
-    this._notify();
-    this._startTick();
+    this._begin('interval', 'GET READY', intervalConfig.prepareTime);
   },
 
   pause() {
     if (!isRunning) return;
+    this._syncTime();
+    if (!isRunning) {
+      // Finished during the sync
+      this._notify();
+      return;
+    }
     isRunning = false;
     isPaused = true;
     clearInterval(timerInterval);
@@ -216,25 +133,19 @@ export const globalTimer = {
     isRunning = true;
     isPaused = false;
     requestWakeLock();
-    this._notify();
     this._startTick();
+    this._notify();
   },
 
   stop() {
-    isRunning = false;
-    isPaused = false;
-    clearInterval(timerInterval);
-    timerInterval = null;
-    timeLeft = 0;
-    totalTime = 0;
-    timerLabel = '';
-    releaseWakeLock();
+    this._halt();
     this._notify();
   },
 
   addTime(seconds) {
     if (!this.isActive) return;
-    timeLeft = Math.max(0, timeLeft + seconds);
+    if (isRunning) this._syncTime();
+    timeLeft = Math.max(1, timeLeft + seconds);
     totalTime = Math.max(totalTime, timeLeft);
     if (isRunning) {
       _tickRefTime = Date.now();
@@ -243,34 +154,40 @@ export const globalTimer = {
     this._notify();
   },
 
+  // Internal: reset to idle without notifying
+  _halt() {
+    isRunning = false;
+    isPaused = false;
+    clearInterval(timerInterval);
+    timerInterval = null;
+    timeLeft = 0;
+    totalTime = 0;
+    timerLabel = '';
+    _tickRefTime = 0;
+    releaseWakeLock();
+  },
+
   // Internal: notify all listeners with a snapshot of current state
   _notify() {
-    const state = {
-      timeLeft,
-      totalTime,
-      isRunning,
-      isPaused,
-      isActive: isRunning || isPaused,
-      mode: timerMode,
-      label: timerLabel,
-      progress: totalTime > 0 ? timeLeft / totalTime : 1,
-      intervalState: { ...intervalState },
-      intervalConfig: { ...intervalConfig }
-    };
+    persist();
+    const state = snapshot();
     listeners.forEach(fn => {
-      try { fn(state); } catch { /* ignore */ }
+      try { fn(state); } catch (err) { console.error(err); }
     });
   },
 
-  // Internal: start the 1-second tick loop
-  _startTick() {
+  // Internal: start the tick loop. A short interval keeps the display
+  // snappy; the wall-clock reference keeps it accurate.
+  _startTick(resetRef = true) {
     clearInterval(timerInterval);
-    _tickRefTime = Date.now();
-    _tickRefTimeLeft = timeLeft;
+    if (resetRef) {
+      _tickRefTime = Date.now();
+      _tickRefTimeLeft = timeLeft;
+    }
     timerInterval = setInterval(() => {
       if (!isRunning) return;
       if (this._syncTime()) this._notify();
-    }, 1000);
+    }, 250);
   },
 
   // Internal: recalculate timeLeft from wall clock to survive background throttling
@@ -284,9 +201,7 @@ export const globalTimer = {
       const prev = timeLeft;
       timeLeft = Math.max(0, _tickRefTimeLeft - elapsed);
       maybePlayTick(prev, timeLeft);
-      if (timeLeft <= 0) {
-        this._finish();
-      }
+      if (timeLeft <= 0) this._finish();
       return timeLeft !== prev;
     }
 
@@ -299,79 +214,128 @@ export const globalTimer = {
       return timeLeft !== prev;
     }
 
-    // Phase(s) completed while backgrounded — step through them
+    // Phase(s) completed while backgrounded — step through them silently,
+    // only sounding the transition if it is happening right now
     let overflow = -remaining;
-    this._advanceIntervalPhase();
-    if (!isRunning) return true;
+    const silent = overflow > 2;
+    this._advanceIntervalPhase(silent);
     while (overflow > 0 && isRunning && timeLeft > 0) {
       if (overflow >= timeLeft) {
         overflow -= timeLeft;
-        this._advanceIntervalPhase();
-        if (!isRunning) return true;
+        this._advanceIntervalPhase(true);
       } else {
         timeLeft -= overflow;
         overflow = 0;
       }
     }
-    _tickRefTime = Date.now();
-    _tickRefTimeLeft = timeLeft;
+    if (isRunning) {
+      _tickRefTime = Date.now();
+      _tickRefTimeLeft = timeLeft;
+    }
     return true;
   },
 
   // Internal: timer completed (non-interval)
   _finish() {
+    const wasRest = timerMode === 'rest';
     isRunning = false;
     isPaused = false;
     clearInterval(timerInterval);
     timerInterval = null;
     timeLeft = 0;
+    _tickRefTime = 0;
     releaseWakeLock();
-    playFinishSound();
-    showToast('Timer complete!');
+    sounds.finish();
+    vibrate([200, 100, 200, 100, 300]);
+    showToast(wasRest ? 'Rest over — next set!' : 'Timer complete!');
     // _notify is called by the caller after this returns
   },
 
   // Internal: advance to the next interval phase
-  _advanceIntervalPhase() {
+  _advanceIntervalPhase(silent = false) {
     const { phase, round, totalRounds } = intervalState;
 
-    if (phase === 'prepare') {
+    if (phase === 'prepare' || phase === 'rest') {
       intervalState.phase = 'work';
-      intervalState.round = 1;
+      intervalState.round = phase === 'prepare' ? 1 : round + 1;
       timeLeft = intervalConfig.workTime;
       totalTime = intervalConfig.workTime;
       timerLabel = 'WORK';
-      playDoubleBeep();
-    } else if (phase === 'work') {
-      if (round >= totalRounds) {
-        // All rounds complete
-        isRunning = false;
-        isPaused = false;
-        clearInterval(timerInterval);
-        timerInterval = null;
-        timeLeft = 0;
-        releaseWakeLock();
-        playFinishSound();
-        showToast('Workout complete!');
-        // _notify is called by the tick loop after this returns
-        return;
-      }
-      intervalState.phase = 'rest';
-      timeLeft = intervalConfig.restTime;
-      totalTime = intervalConfig.restTime;
-      timerLabel = 'REST';
-      playBeep();
-    } else if (phase === 'rest') {
-      intervalState.phase = 'work';
-      intervalState.round++;
-      timeLeft = intervalConfig.workTime;
-      totalTime = intervalConfig.workTime;
-      timerLabel = 'WORK';
-      playDoubleBeep();
+      if (!silent) { sounds.work(); vibrate([150, 80, 150]); }
+      return;
     }
-    // _notify is called by the tick loop after this returns
+
+    // phase === 'work'
+    if (round >= totalRounds) {
+      isRunning = false;
+      isPaused = false;
+      clearInterval(timerInterval);
+      timerInterval = null;
+      timeLeft = 0;
+      _tickRefTime = 0;
+      releaseWakeLock();
+      if (!silent) { sounds.finish(); vibrate([200, 100, 200, 100, 300]); }
+      showToast('Interval session complete!');
+      return;
+    }
+    if (intervalConfig.restTime <= 0) {
+      intervalState.phase = 'rest';
+      this._advanceIntervalPhase(silent);
+      return;
+    }
+    intervalState.phase = 'rest';
+    timeLeft = intervalConfig.restTime;
+    totalTime = intervalConfig.restTime;
+    timerLabel = 'REST';
+    if (!silent) { sounds.rest(); vibrate(300); }
   }
 };
+
+// Restore a timer that was running when the app was closed
+(function restore() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PERSIST_KEY) || 'null');
+    if (!saved) return;
+    timerMode = saved.timerMode;
+    timerLabel = saved.timerLabel;
+    totalTime = saved.totalTime;
+    timeLeft = saved.timeLeft;
+    intervalConfig = saved.intervalConfig || intervalConfig;
+    intervalState = saved.intervalState || intervalState;
+
+    if (saved.isPaused) {
+      isPaused = true;
+      return;
+    }
+    if (!saved.isRunning || !saved.refTime) {
+      localStorage.removeItem(PERSIST_KEY);
+      return;
+    }
+
+    _tickRefTime = saved.refTime;
+    _tickRefTimeLeft = saved.refTimeLeft;
+    const elapsed = Math.floor((Date.now() - _tickRefTime) / 1000);
+
+    if (timerMode !== 'interval' && elapsed >= _tickRefTimeLeft) {
+      // Finished long ago while the app was closed — discard quietly
+      timerLabel = '';
+      timeLeft = 0;
+      totalTime = 0;
+      localStorage.removeItem(PERSIST_KEY);
+      return;
+    }
+
+    isRunning = true;
+    globalTimer._syncTime();
+    if (isRunning) {
+      requestWakeLock();
+      globalTimer._startTick(false);
+    }
+    persist();
+  } catch {
+    localStorage.removeItem(PERSIST_KEY);
+  }
+})();
 
 // Sync timer immediately when the tab becomes visible again
 document.addEventListener('visibilitychange', () => {
